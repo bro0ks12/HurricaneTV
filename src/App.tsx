@@ -1,0 +1,60 @@
+import { useEffect, useState } from "react";
+import { Player } from "./components/Player";
+import { Background } from "./components/ui";
+import { initProxy } from "./lib/http";
+import { installSpatialNav } from "./lib/spatial";
+import { Account } from "./screens/Account";
+import { CatchUp } from "./screens/CatchUp";
+import { Epg } from "./screens/Epg";
+import { Favorites } from "./screens/Favorites";
+import { Home } from "./screens/Home";
+import { Live } from "./screens/Live";
+import { MediaScreen } from "./screens/Media";
+import { Multi } from "./screens/Multi";
+import { Profiles } from "./screens/Profiles";
+import { Search } from "./screens/Search";
+import { Settings } from "./screens/Settings";
+import { useApp, useProfile, useScreen } from "./store/app";
+
+export default function App() {
+  const profile = useProfile();
+  const screen = useScreen();
+  const back = useApp((s) => s.back);
+  const playing = useApp((s) => !!s.playing);
+  const [ready, setReady] = useState(false);
+  const [switching, setSwitching] = useState(false);
+
+  useEffect(() => {
+    initProxy().finally(() => setReady(true));
+  }, []);
+  useEffect(() => installSpatialNav(back), [back]);
+
+  if (!ready) return <Background />;
+
+  const showProfiles = !profile || switching;
+  const switchProfile = () => setSwitching(true);
+
+  return (
+    <>
+      <Background dim={screen !== "home"} />
+      {profile && (
+        <main key={`${profile.id}:${screen}`} className="h-full animate-fade-up" style={{ visibility: playing ? "hidden" : undefined }}>
+          {screen === "home" && <Home onSwitchProfile={switchProfile} />}
+          {screen === "live" && <Live />}
+          {screen === "radio" && <Live radio />}
+          {screen === "epg" && <Epg />}
+          {screen === "vod" && <MediaScreen kind="vod" />}
+          {screen === "series" && <MediaScreen kind="series" />}
+          {screen === "catchup" && <CatchUp />}
+          {screen === "multi" && <Multi />}
+          {screen === "favorites" && <Favorites />}
+          {screen === "account" && <Account onSwitchProfile={switchProfile} />}
+          {screen === "settings" && <Settings />}
+          {screen === "search" && <Search />}
+        </main>
+      )}
+      {showProfiles && <Profiles canClose={!!profile} onDone={() => setSwitching(false)} />}
+      <Player />
+    </>
+  );
+}

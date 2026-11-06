@@ -1,0 +1,124 @@
+@import "tailwindcss";
+@import "@fontsource-variable/manrope";
+
+@theme {
+  --font-sans: "Manrope Variable", system-ui, sans-serif;
+  --color-ink-950: #030b22;
+  --color-ink-900: #061433;
+  --color-ink-800: #0a1f4d;
+  --color-ink-700: #0f2c6b;
+  --color-sky-glow: #38bdf8;
+  --color-brand: #1d8bff;
+  --color-brand-strong: #0a66f0;
+}
+
+:root {
+  color-scheme: dark;
+  --tile-border: rgba(255, 255, 255, 0.85);
+  --glass: rgba(10, 31, 77, 0.55);
+  --glass-strong: rgba(6, 20, 51, 0.82);
+  --line: rgba(148, 197, 255, 0.16);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: var(--color-ink-950);
+  color: #fff;
+  font-family: var(--font-sans);
+  overflow: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 197, 255, 0.25) transparent;
+}
+
+input,
+select,
+textarea {
+  user-select: text;
+}
+
+/* Focus ring for keyboard / remote navigation */
+.focusable {
+  outline: none;
+}
+.focusable:focus-visible {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 6px rgba(56, 189, 248, 0.55),
+    0 12px 40px -8px rgba(56, 189, 248, 0.6);
+}
+
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--line);
+}
+
+.text-shadow {
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-fade-up {
+  animation: fade-up 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+.skeleton {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0.04) 100%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+@keyframes sweep {
+  0%,
+  100% {
+    transform: translateX(-2%) rotate(-1deg);
+    opacity: 0.85;
+  }
+  50% {
+    transform: translateX(2%) rotate(1deg);
+    opacity: 1;
+  }
+}
+.animate-sweep {
+  animation: sweep 14s ease-in-out infinite;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
