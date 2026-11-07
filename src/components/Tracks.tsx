@@ -51,7 +51,7 @@ function ownTrack(v: HTMLVideoElement, label: string) {
 }
 
 function useCueTrack(video: HTMLVideoElement | null, label: string, source: string | null, cues: Cue[], offset: number, show: boolean) {
-  const st = useRef({ key: "", added: new Set<string>() });
+  const st = useRef({ key: "", added: new Map<number, VTTCue>() });
   useEffect(() => {
     if (!video) return;
     const t = ownTrack(video, label);
@@ -59,19 +59,27 @@ function useCueTrack(video: HTMLVideoElement | null, label: string, source: stri
     if (st.current.key !== key) {
       if (t.mode === "disabled") t.mode = "hidden"; // cues can only be edited when not disabled
       while (t.cues && t.cues.length) t.removeCue(t.cues[0]);
-      st.current = { key, added: new Set() };
+      st.current = { key, added: new Map() };
     }
     if (source) {
       if (t.mode === "disabled") t.mode = "hidden";
       for (const c of cues) {
-        const k = `${c.start}|${c.text}`;
-        if (st.current.added.has(k)) continue;
-        st.current.added.add(k);
         const s = c.start + offset;
         const e = c.end + offset;
         if (e <= 0) continue;
+        const text = c.text.replace(/\r/g, "");
+        // the proxy refines a cue after first reporting it (real duration, merged
+        // simultaneous lines), so update the one we already added instead of skipping it
+        const have = st.current.added.get(c.start);
+        if (have) {
+          if (have.endTime !== e) have.endTime = e;
+          if (have.text !== text) have.text = text;
+          continue;
+        }
         try {
-          t.addCue(new VTTCue(Math.max(0, s), e, c.text.replace(/\r/g, "")));
+          const vc = new VTTCue(Math.max(0, s), e, text);
+          t.addCue(vc);
+          st.current.added.set(c.start, vc);
         } catch {
           /* skip malformed */
         }
@@ -164,22 +172,24 @@ export function useTracks(
     setMkvData(null);
     if (mkvSel == null || !streamUrl) return;
     let alive = true;
-    let last = -1;
+    let ver: number | null = null;
     const tick = async () => {
-      const c = await mkvCues(streamUrl, mkvSel);
-      if (!alive) return;
-      if (c.length !== last) {
-        last = c.length;
-        setMkvData({ track: mkvSel, cues: c });
-      }
+      const r = await mkvCues(streamUrl, mkvSel, ver);
+      if (!alive || !r) return; // null = nothing new since last time
+      ver = r.ver;
+      setMkvData({ track: mkvSel, cues: r.cues });
     };
     tick();
-    const iv = window.setInterval(tick, 2000);
+    const iv = window.setInterval(tick, 500);
+    // after a seek the first lines would otherwise wait for the next poll
+    const events = ["seeking", "seeked", "waiting", "playing"] as const;
+    for (const e of events) video?.addEventListener(e, tick);
     return () => {
       alive = false;
       window.clearInterval(iv);
+      for (const e of events) video?.removeEventListener(e, tick);
     };
-  }, [mkvSel, streamUrl]);
+  }, [mkvSel, streamUrl, video]);
 
   useCueTrack(video, FILE_LABEL, ext ? `file:${ext.name}` : null, ext?.cues ?? [], offset, sel === "file");
   const mkvCurrent = mkvData && mkvData.track === mkvSel ? mkvData.cues : NO_CUES;

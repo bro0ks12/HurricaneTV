@@ -8,9 +8,10 @@ fn mkv_tracks(url: String) -> Vec<mkv::SubTrack> {
 }
 
 /// Cues collected so far for one MKV subtitle track (grows as playback buffers).
+/// Returns null when nothing changed since version `since`.
 #[tauri::command]
-fn mkv_cues(url: String, track: u64) -> Vec<mkv::CueOut> {
-    mkv::cues(&url, track)
+fn mkv_cues(url: String, track: u64, since: Option<u64>) -> Option<mkv::CuesOut> {
+    mkv::cues_since(&url, track, since)
 }
 
 use std::collections::HashMap;

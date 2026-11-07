@@ -99,11 +99,12 @@ export async function mkvTracks(url: string): Promise<MkvTrack[]> {
   }
 }
 
-export async function mkvCues(url: string, track: number): Promise<{ start: number; end: number; text: string }[]> {
-  if (!inTauri) return [];
+/** Cues of one MKV subtitle track; null when nothing changed since version `since`. */
+export async function mkvCues(url: string, track: number, since: number | null): Promise<{ ver: number; cues: { start: number; end: number; text: string }[] } | null> {
+  if (!inTauri) return null;
   try {
-    return await invoke("mkv_cues", { url, track });
+    return await invoke("mkv_cues", { url, track, since });
   } catch {
-    return [];
+    return null;
   }
 }

@@ -8,6 +8,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::Read;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::Serialize;
@@ -41,6 +42,10 @@ const ID_BLOCK_DURATION: u32 = 0x9B;
 const LEVEL1: [u32; 6] = [0x114D9B74, 0x1C53BB6B, 0x1254C367, 0x1043A770, 0x1941A469, ID_CLUSTER];
 
 const MAX_LEAF: u64 = 1 << 20;
+/// no real video/audio frame is bigger than this; a larger "size" means we are parsing garbage
+const MAX_BLOCK: u64 = 1 << 27;
+/// same idea for other skipped elements (Cues, Tags, attachments...)
+const MAX_SKIP: u64 = 1 << 34;
 
 #[derive(Clone, Default, Serialize)]
 pub struct SubTrack {
@@ -72,11 +77,19 @@ struct StoredCue {
     text: String,
 }
 
+#[derive(Clone, Serialize)]
+pub struct CuesOut {
+    /// bumps whenever any cue is added or changed, so the UI can skip unchanged polls
+    pub ver: u64,
+    pub cues: Vec<CueOut>,
+}
+
 #[derive(Default)]
 pub struct MkvState {
     tracks: Vec<SubTrack>,
     scale: u64,
     cues: HashMap<u64, BTreeMap<i64, StoredCue>>,
+    ver: u64,
 }
 
 impl MkvState {
@@ -87,9 +100,17 @@ impl MkvState {
 
 type Shared = Arc<Mutex<MkvState>>;
 
-fn registry() -> &'static Mutex<HashMap<String, Shared>> {
-    static R: OnceLock<Mutex<HashMap<String, Shared>>> = OnceLock::new();
+/// url -> (state, last-used tick)
+type Registry = HashMap<String, (Shared, u64)>;
+
+fn registry() -> &'static Mutex<Registry> {
+    static R: OnceLock<Mutex<Registry>> = OnceLock::new();
     R.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+static TICK: AtomicU64 = AtomicU64::new(0);
+fn tick() -> u64 {
+    TICK.fetch_add(1, Ordering::Relaxed)
 }
 
 pub fn known(url: &str) -> bool {
@@ -99,20 +120,27 @@ pub fn known(url: &str) -> bool {
 fn state_for(url: &str) -> Shared {
     let mut r = registry().lock().unwrap();
     if !r.contains_key(url) && r.len() >= 8 {
-        r.clear(); // keep memory bounded; only the current titles matter
+        // keep memory bounded: drop the least recently used title, never the one playing
+        if let Some(old) = r.iter().min_by_key(|(_, (_, t))| *t).map(|(k, _)| k.clone()) {
+            r.remove(&old);
+        }
     }
-    r.entry(url.to_string()).or_insert_with(|| Arc::new(Mutex::new(MkvState::new()))).clone()
+    let e = r.entry(url.to_string()).or_insert_with(|| (Arc::new(Mutex::new(MkvState::new())), 0));
+    e.1 = tick();
+    e.0.clone()
 }
 
 pub fn tracks(url: &str) -> Vec<SubTrack> {
-    let r = registry().lock().unwrap();
-    r.get(url).map(|s| s.lock().unwrap().tracks.clone()).unwrap_or_default()
+    let mut r = registry().lock().unwrap();
+    r.get_mut(url)
+        .map(|e| {
+            e.1 = tick();
+            e.0.lock().unwrap().tracks.clone()
+        })
+        .unwrap_or_default()
 }
 
-pub fn cues(url: &str, track: u64) -> Vec<CueOut> {
-    let r = registry().lock().unwrap();
-    let Some(s) = r.get(url) else { return vec![] };
-    let s = s.lock().unwrap();
+fn build_cues(s: &MkvState, track: u64) -> Vec<CueOut> {
     let Some(map) = s.cues.get(&track) else { return vec![] };
     let items: Vec<(&i64, &StoredCue)> = map.iter().collect();
     items
@@ -127,6 +155,26 @@ pub fn cues(url: &str, track: u64) -> Vec<CueOut> {
             CueOut { start: **start as f64 / 1000.0, end: end as f64 / 1000.0, text: c.text.clone() }
         })
         .collect()
+}
+
+#[allow(dead_code)]
+pub fn cues(url: &str, track: u64) -> Vec<CueOut> {
+    let r = registry().lock().unwrap();
+    let Some(e) = r.get(url) else { return vec![] };
+    let s = e.0.lock().unwrap();
+    build_cues(&s, track)
+}
+
+/// Cues for one track, or None when nothing changed since version `since`.
+pub fn cues_since(url: &str, track: u64, since: Option<u64>) -> Option<CuesOut> {
+    let mut r = registry().lock().unwrap();
+    let e = r.get_mut(url)?;
+    e.1 = tick();
+    let s = e.0.lock().unwrap();
+    if since == Some(s.ver) {
+        return None;
+    }
+    Some(CuesOut { ver: s.ver, cues: build_cues(&s, track) })
 }
 
 /* ---------------- EBML helpers ---------------- */
@@ -250,6 +298,28 @@ impl Parser {
                 let pat = [0x1F, 0x43, 0xB6, 0x75];
                 match self.buf.windows(4).position(|w| w == pat) {
                     Some(p) => {
+                        // the 4 bytes can also occur by chance inside video data: a real
+                        // Cluster is followed by its size and then Timecode (E7) or CRC-32 (BF)
+                        match read_vint(&self.buf[p + 4..]) {
+                            None => {
+                                self.buf.drain(..p);
+                                return;
+                            }
+                            Some(None) => {
+                                self.buf.drain(..p + 1);
+                                continue;
+                            }
+                            Some(Some((_, slen, _))) => {
+                                let Some(&child) = self.buf.get(p + 4 + slen) else {
+                                    self.buf.drain(..p);
+                                    return;
+                                };
+                                if child != 0xE7 && child != 0xBF {
+                                    self.buf.drain(..p + 1);
+                                    continue;
+                                }
+                            }
+                        }
                         self.buf.drain(..p);
                         self.synced = true;
                         self.cluster_tc = None;
@@ -316,6 +386,11 @@ impl Parser {
                         }
                         return;
                     };
+                    if size > MAX_BLOCK {
+                        self.buf.drain(..1);
+                        self.resync();
+                        continue;
+                    }
                     if self.sub_numbers.contains(&track) && size < MAX_LEAF {
                         let total = hl + size as usize;
                         if self.buf.len() < total {
@@ -332,6 +407,9 @@ impl Parser {
                     self.finish_track();
                     if unknown {
                         self.buf.drain(..hl);
+                    } else if size > MAX_SKIP {
+                        self.buf.drain(..1);
+                        self.resync();
                     } else {
                         self.skip_bytes(hl, size);
                     }
@@ -355,6 +433,9 @@ impl Parser {
                 _ => {
                     if unknown {
                         self.buf.drain(..hl);
+                    } else if size > MAX_SKIP {
+                        self.buf.drain(..1);
+                        self.resync();
                     } else {
                         self.skip_bytes(hl, size);
                     }
@@ -387,8 +468,16 @@ impl Parser {
                 if let Some((track, start)) = self.last_cue.take() {
                     let mut st = self.st.lock().unwrap();
                     let scale = st.scale as i64;
-                    if let Some(c) = st.cues.get_mut(&track).and_then(|m| m.get_mut(&start)) {
-                        c.end_ms = Some(start + uint(v) as i64 * scale / 1_000_000);
+                    let end = start + uint(v) as i64 * scale / 1_000_000;
+                    let changed = match st.cues.get_mut(&track).and_then(|m| m.get_mut(&start)) {
+                        Some(c) if c.end_ms != Some(end) => {
+                            c.end_ms = Some(end);
+                            true
+                        }
+                        _ => false,
+                    };
+                    if changed {
+                        st.ver += 1;
                     }
                 }
             }
@@ -446,7 +535,26 @@ impl Parser {
         }
         let mut st = self.st.lock().unwrap();
         let start_ms = (ctc + rel) * st.scale as i64 / 1_000_000;
-        st.cues.entry(track).or_default().insert(start_ms, StoredCue { end_ms: None, text });
+        let mut changed = true;
+        match st.cues.entry(track).or_default().entry(start_ms) {
+            std::collections::btree_map::Entry::Occupied(mut o) => {
+                // two lines starting together (two speakers / top+bottom) must both show;
+                // the same block seen again after a seek must not be duplicated
+                let c = o.get_mut();
+                if c.text == text || c.text.split('\n').any(|l| l == text) {
+                    changed = false;
+                } else {
+                    c.text.push('\n');
+                    c.text.push_str(&text);
+                }
+            }
+            std::collections::btree_map::Entry::Vacant(v) => {
+                v.insert(StoredCue { end_ms: None, text });
+            }
+        }
+        if changed {
+            st.ver += 1;
+        }
         self.last_cue = Some((track, start_ms));
     }
 }
@@ -499,5 +607,75 @@ mod tests {
         let before = cues(url2, t[0].number).len();
         feed_file(url2, &data, data.len() / 2 + 12345, 4096);
         assert_eq!(cues(url2, t[0].number).len(), before, "mid-file pass should only re-add existing cues");
+    }
+}
+
+#[cfg(test)]
+mod synthetic_tests {
+    use super::*;
+
+    fn el(id: &[u8], payload: &[u8]) -> Vec<u8> {
+        let mut v = id.to_vec();
+        v.push(0x01); // 8-byte size
+        v.extend_from_slice(&(payload.len() as u64).to_be_bytes()[1..]);
+        v.extend_from_slice(payload);
+        v
+    }
+
+    fn header() -> Vec<u8> {
+        let entry = [
+            el(&[0xD7], &[1]),
+            el(&[0x83], &[0x11]),
+            el(&[0x86], b"S_TEXT/UTF8"),
+            el(&[0x22, 0xB5, 0x9C], b"por"),
+        ]
+        .concat();
+        let tracks = el(&[0x16, 0x54, 0xAE, 0x6B], &el(&[0xAE], &entry));
+        [el(&[0x1A, 0x45, 0xDF, 0xA3], &[]), el(&[0x18, 0x53, 0x80, 0x67], &tracks)].concat()
+    }
+
+    fn block(rel: i16, text: &str) -> Vec<u8> {
+        let mut p = vec![0x81]; // track 1
+        p.extend_from_slice(&rel.to_be_bytes());
+        p.push(0);
+        p.extend_from_slice(text.as_bytes());
+        el(&[0xA3], &p)
+    }
+
+    fn cluster(tc: u8, blocks: &[Vec<u8>]) -> Vec<u8> {
+        el(&[0x1F, 0x43, 0xB6, 0x75], &[el(&[0xE7], &[tc]), blocks.concat()].concat())
+    }
+
+    #[test]
+    fn simultaneous_cues_are_merged_and_not_duplicated() {
+        let url = "test://synthetic-merge";
+        let data = [header(), cluster(5, &[block(0, "Hello"), block(0, "Olá")])].concat();
+        let mut p = Parser::new(url, true);
+        p.feed(&data);
+        let c = cues(url, 1);
+        assert_eq!(c.len(), 1);
+        assert_eq!(c[0].text, "Hello\nOlá");
+        let v = cues_since(url, 1, None).unwrap().ver;
+        // the same cluster seen again (seek back) changes nothing
+        let mut p2 = Parser::new(url, false);
+        p2.feed(&cluster(5, &[block(0, "Hello"), block(0, "Olá")]));
+        assert!(cues_since(url, 1, Some(v)).is_none());
+    }
+
+    #[test]
+    fn false_cluster_pattern_in_video_data_does_not_blind_the_parser() {
+        let url = "test://synthetic-resync";
+        let mut p = Parser::new(url, true);
+        p.feed(&[header(), cluster(0, &[])].concat());
+        // mid-file connection: starts with junk that contains the Cluster id by chance,
+        // followed by an absurd "size" that would make the old parser skip everything
+        let mut p2 = Parser::new(url, false);
+        let mut junk = vec![0x55, 0x1F, 0x43, 0xB6, 0x75, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE, 0x42, 0x42];
+        junk.extend(std::iter::repeat(0x99).take(64));
+        p2.feed(&junk);
+        p2.feed(&cluster(9, &[block(100, "after junk")]));
+        let c = cues(url, 1);
+        assert_eq!(c.len(), 1, "cue after the junk must still be parsed");
+        assert_eq!(c[0].text, "after junk");
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "hurricanetv"
-version = "0.3.3"
+version = "0.3.4"
 description = "HurricaneTV - IPTV player"
 edition = "2021"
 
