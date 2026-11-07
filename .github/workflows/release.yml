@@ -32,4 +32,3 @@ jobs:
           releaseBody: Descarrega o instalador `HurricaneTV_*_x64-setup.exe`. Quem já tem a app recebe aviso de atualização automaticamente.
           releaseDraft: false
           prerelease: false
-          uploadUpdaterJson: true
