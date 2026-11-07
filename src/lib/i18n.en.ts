@@ -340,5 +340,4 @@ export const EN: Record<string, string> = {
   "Falhou a atualização. Tenta outra vez.": "Update failed. Try again.",
   "Atualizar e reiniciar": "Update and restart",
   "A descarregar…": "Downloading…",
-  Fechar: "Close",
 };
