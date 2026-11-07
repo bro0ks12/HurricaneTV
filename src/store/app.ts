@@ -27,6 +27,10 @@ export interface PlayRequest {
   channels?: Channel[];
   index?: number;
   poster?: string;
+  ua?: string;
+  referer?: string;
+  /** set when playing a catch-up "start over": lets the player jump back to live */
+  liveReturn?: PlayRequest;
 }
 
 interface Favs {
@@ -51,6 +55,12 @@ interface State {
   settings: Settings;
   favs: Record<string, Favs>;
   history: Record<string, HistoryEntry[]>;
+  /** parental locks per profile: "live:<catId>" | "vod:<catId>" | "series:<catId>" */
+  lockedCats: Record<string, string[]>;
+  /** epoch ms until which locked content is unlocked (not persisted) */
+  parentalUntil: number;
+  toggleLock(key: string): void;
+  setParentalUntil(t: number): void;
   // volatile
   stack: Screen[];
   playing: PlayRequest | null;
@@ -61,6 +71,8 @@ interface State {
   go(s: Screen): void;
   back(): void;
   home(): void;
+  /** top-level navigation from the sidebar: replaces the stack */
+  nav(s: Screen): void;
   play(r: PlayRequest | null): void;
   toggleFav(kind: keyof Favs, item: Channel | VodItem | SeriesItem): void;
   isFav(kind: keyof Favs, id: string): boolean;
@@ -68,6 +80,13 @@ interface State {
 }
 
 const emptyFavs = (): Favs => ({ live: [], vod: [], series: [] });
+
+// 0.1.0 stored everything under "nexotv": carry it over so updating keeps profiles
+try {
+  if (!localStorage.getItem("hurricanetv") && localStorage.getItem("nexotv")) localStorage.setItem("hurricanetv", localStorage.getItem("nexotv")!);
+} catch {
+  /* storage unavailable */
+}
 
 export const useApp = create<State>()(
   persist(
@@ -77,6 +96,15 @@ export const useApp = create<State>()(
       settings: defaultSettings,
       favs: {},
       history: {},
+      lockedCats: {},
+      parentalUntil: 0,
+      toggleLock: (key) =>
+        set((s) => {
+          const pid = s.activeId ?? "_";
+          const cur = s.lockedCats[pid] ?? [];
+          return { lockedCats: { ...s.lockedCats, [pid]: cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key] } };
+        }),
+      setParentalUntil: (t) => set({ parentalUntil: t }),
       stack: ["home"],
       playing: null,
       addProfile: (p) => set((s) => ({ profiles: [...s.profiles.filter((x) => x.id !== p.id), p], activeId: p.id, stack: ["home"] })),
@@ -95,6 +123,7 @@ export const useApp = create<State>()(
       go: (screen) => set((s) => ({ stack: [...s.stack, screen] })),
       back: () => set((s) => ({ stack: s.stack.length > 1 ? s.stack.slice(0, -1) : s.stack })),
       home: () => set({ stack: ["home"] }),
+      nav: (screen) => set({ stack: screen === "home" ? ["home"] : ["home", screen] }),
       play: (r) => set({ playing: r }),
       toggleFav: (kind, item) =>
         set((s) => {
@@ -116,8 +145,12 @@ export const useApp = create<State>()(
         }),
     }),
     {
-      name: "nexotv",
-      partialize: (s) => ({ profiles: s.profiles, activeId: s.activeId, settings: s.settings, favs: s.favs, history: s.history }),
+      name: "hurricanetv",
+      partialize: (s) => ({ profiles: s.profiles, activeId: s.activeId, settings: s.settings, favs: s.favs, history: s.history, lockedCats: s.lockedCats }),
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<State>;
+        return { ...current, ...p, settings: { ...defaultSettings, ...(p.settings ?? {}) } };
+      },
       onRehydrateStorage: () => (s) => {
         if (s) setSettingsRef({ ...defaultSettings, ...s.settings });
       },

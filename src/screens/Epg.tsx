@@ -1,12 +1,14 @@
 import { CalendarClock, ChevronLeft, ChevronRight, LayoutList, Star } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CategoryList, ChannelLogo, Empty, ScreenHeader, Spinner } from "../components/ui";
+import { useParental } from "../lib/parental";
 import { useQuery } from "../lib/query";
 import { isAdult } from "../lib/settings";
 import type { Channel, Program } from "../lib/types";
 import { cn, fmtDay, fmtTime } from "../lib/util";
 import { useApp, useFavs, useProfile, useProvider } from "../store/app";
 
+import { t } from "../lib/i18n";
 const PX_PER_MIN = 5;
 const HOURS = 8;
 const ROW_H = 64;
@@ -29,14 +31,15 @@ export function Epg() {
   }, []);
 
   const cats = useQuery(`live-cats:${profile.id}`, () => provider.liveCategories());
+  const par = useParental("live", cats.data);
   const all = useQuery(`live-all:${profile.id}`, () => provider.liveChannels());
 
   const categories = useMemo(() => (hideAdult ? (cats.data ?? []).filter((c) => !isAdult(c.name)) : (cats.data ?? [])), [cats.data, hideAdult]);
   const channels = useMemo(() => {
     let l = cat === "__fav" ? favs.live : (all.data ?? []);
     if (cat !== "__all" && cat !== "__fav") l = l.filter((c) => c.categoryId === cat);
-    return l.filter((c) => !c.isRadio).slice(0, MAX_ROWS);
-  }, [cat, all.data, favs.live]);
+    return l.filter((c) => !c.isRadio && !par.hidden.has(c.categoryId ?? "")).slice(0, MAX_ROWS);
+  }, [cat, all.data, favs.live, par.hidden]);
 
   const start = useMemo(() => {
     const d = new Date(now);
@@ -55,13 +58,13 @@ export function Epg() {
 
   return (
     <div className="flex h-full flex-col">
-      <ScreenHeader title="Guia TV" icon={<CalendarClock className="size-5" />}>
+      <ScreenHeader title={t("Guia TV")} icon={<CalendarClock className="size-5" />}>
         <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
           <button onClick={() => setOffsetH((o) => o - 3)} className="focusable grid size-8 place-items-center rounded-lg hover:bg-white/10">
             <ChevronLeft className="size-4" />
           </button>
           <button onClick={() => setOffsetH(0)} className={cn("focusable rounded-lg px-3 py-1.5 text-xs font-bold", offsetH === 0 ? "bg-white/15" : "text-sky-100/60 hover:text-white")}>
-            Agora
+            {t("Agora")}
           </button>
           <button onClick={() => setOffsetH((o) => o + 3)} className="focusable grid size-8 place-items-center rounded-lg hover:bg-white/10">
             <ChevronRight className="size-4" />
@@ -71,20 +74,21 @@ export function Epg() {
       </ScreenHeader>
       <div className="flex min-h-0 flex-1">
         <CategoryList
+          parental={par}
           loading={cats.loading}
           categories={categories}
           active={cat}
           onSelect={setCat}
           extra={[
-            { id: "__all", name: "Todos os canais", icon: <LayoutList className="size-4" /> },
-            { id: "__fav", name: "Favoritos", icon: <Star className="size-4" /> },
+            { id: "__all", name: t("Todos os canais"), icon: <LayoutList className="size-4" /> },
+            { id: "__fav", name: t("Favoritos"), icon: <Star className="size-4" /> },
           ]}
         />
         <div className="min-w-0 flex-1 bg-ink-950/25">
           {all.loading ? (
-            <Spinner label="A carregar guia…" />
+            <Spinner label={t("A carregar guia…")} />
           ) : !channels.length ? (
-            <Empty icon={<CalendarClock className="size-6" />} title="Sem canais" />
+            <Empty icon={<CalendarClock className="size-6" />} title={t("Sem canais")} />
           ) : (
             <div ref={scroller} className="relative h-full overflow-auto">
               <div style={{ width: width + CH_W }} className="relative">
@@ -122,12 +126,12 @@ function EpgRow({ ch, channels, start, end, now }: { ch: Channel; channels: Chan
   const epg = useQuery(`epg-grid:${ch.id}`, () => provider.epg(ch, 30));
 
   const progs = (epg.data ?? []).filter((p) => p.end > start && p.start < end);
-  const openLive = () => play({ title: ch.name, stream: ch.stream, type: "live", channels, index: channels.indexOf(ch), poster: ch.logo });
+  const openLive = () => play({ title: ch.name, stream: ch.stream, type: "live", channels, index: channels.indexOf(ch), poster: ch.logo, ua: ch.ua, referer: ch.referer });
   const openProgram = async (p: Program) => {
     if (p.start <= now && p.end > now) return openLive();
     if (p.end < now && ch.catchup && provider.catchupUrl) {
       const url = await provider.catchupUrl(ch, p);
-      play({ title: ch.name, subtitle: `${p.title} · ${fmtTime(p.start, h24)}`, stream: url, type: "url", poster: ch.logo });
+      play({ title: ch.name, subtitle: `${p.title} · ${fmtTime(p.start, h24)}`, stream: url, type: "url", poster: ch.logo, ua: ch.ua, referer: ch.referer });
     }
   };
 
@@ -140,7 +144,7 @@ function EpgRow({ ch, channels, start, end, now }: { ch: Channel; channels: Chan
       </button>
       <div className="relative flex-1">
         {epg.loading && <div className="skeleton absolute inset-y-2 left-2 w-1/2 rounded-lg" />}
-        {!epg.loading && !progs.length && <div className="absolute inset-y-2 left-1 right-1 flex items-center rounded-lg bg-white/[0.03] px-3 text-xs text-sky-100/30">Sem informação</div>}
+        {!epg.loading && !progs.length && <div className="absolute inset-y-2 left-1 right-1 flex items-center rounded-lg bg-white/[0.03] px-3 text-xs text-sky-100/30">{t("Sem informação")}</div>}
         {progs.map((p, i) => {
           const s = Math.max(p.start, start);
           const e = Math.min(p.end, end);
@@ -162,7 +166,7 @@ function EpgRow({ ch, channels, start, end, now }: { ch: Channel; channels: Chan
               <div className="truncate pt-1.5 text-[13px] font-semibold">{p.title}</div>
               <div className="truncate text-[11px] text-sky-100/55 tabular-nums">
                 {fmtTime(p.start, h24)} – {fmtTime(p.end, h24)}
-                {past && ch.catchup ? " · ⟲ Catch-up" : ""}
+                {past && ch.catchup ? t(" · ⟲ Catch-up") : ""}
               </div>
             </button>
           );

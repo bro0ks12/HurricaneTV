@@ -5,7 +5,7 @@ import type { Category, Channel, Program, Provider, SeriesItem, VodItem } from "
 const HLS = [
   "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
   "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8",
-  "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
+  "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8",
 ];
 const MP4 = [
   "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
@@ -79,16 +79,18 @@ const vodCats: Category[] = [
   { id: "scifi", name: "Ficção Científica" },
 ];
 const movieTitles = [
-  "O Último Horizonte", "Cidade de Vidro", "Rota 66", "Eclipse Total", "Maré Alta", "O Arquivista", "Sombras de Lisboa",
+  "Big Buck Bunny", "Tears of Steel", "Rota 66", "Sintel", "Maré Alta", "O Arquivista", "Sombras de Lisboa",
   "Ponto Zero", "Céu Vermelho", "A Fronteira", "Nevoeiro", "Fragmentos", "Linha de Fogo", "Órbita", "O Relojoeiro",
   "Faróis", "Terra Prometida", "Velocidade Máxima", "Neon", "O Silêncio",
 ];
+// real open films (the demo streams are these), so metadata lookups find them
+const REAL_YEARS: Record<string, string> = { "Big Buck Bunny": "2008", "Tears of Steel": "2012", Sintel: "2010" };
 const vod: VodItem[] = movieTitles.map((name, i) => ({
   id: `m${i}`,
   name,
   categoryId: vodCats[i % vodCats.length].id,
   rating: Math.round((5 + ((i * 37) % 45) / 10) * 10) / 10,
-  year: String(2010 + ((i * 7) % 15)),
+  year: REAL_YEARS[name] ?? String(2010 + ((i * 7) % 15)),
   stream: MP4[i % MP4.length],
 }));
 
@@ -107,7 +109,7 @@ const wait = <T,>(v: T) => new Promise<T>((r) => setTimeout(() => r(v), 120));
 export function createDemo(): Provider {
   return {
     kind: "demo",
-    account: () => wait({ status: "Active", expires: Date.now() + 365 * 864e5, maxConnections: 2, activeConnections: 0, serverUrl: "demo://nexotv", isTrial: true }),
+    account: () => wait({ status: "Active", expires: Date.now() + 365 * 864e5, maxConnections: 2, activeConnections: 0, serverUrl: "demo://hurricanetv", isTrial: true }),
     liveCategories: () => wait(liveCats),
     liveChannels: (cat) => wait(channels.filter((c) => !cat || c.categoryId === cat)),
     vodCategories: () => wait(vodCats),

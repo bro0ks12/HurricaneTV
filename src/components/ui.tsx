@@ -1,38 +1,28 @@
-import { ArrowLeft, Loader2, Search, Star, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Loader2, Lock, LockOpen, Search, Star, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useApp } from "../store/app";
 import { cn, fmtTime } from "../lib/util";
 
+import { t, locale } from "../lib/i18n";
 /* ---------------- Background ---------------- */
 
 export function Background({ dim = false }: { dim?: boolean }) {
   return (
-    <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+    <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-ink-950">
+      {/* storm glows */}
+      <div className="absolute -top-[30%] -left-[15%] size-[70vw] rounded-full opacity-[0.16] blur-[120px]" style={{ background: "#22e1ff" }} />
+      <div className="absolute -right-[20%] -bottom-[35%] size-[75vw] rounded-full opacity-[0.18] blur-[140px]" style={{ background: "#7c5cff" }} />
+      {/* slow-turning vortex */}
       <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(120% 90% at 50% 0%, #1765d8 0%, #0b3a9a 32%, #071d55 62%, #030b22 100%)",
-        }}
+        className="animate-storm absolute top-1/2 left-1/2 size-[140vmax] -translate-x-1/2 -translate-y-1/2 opacity-[0.07]"
+        style={{ background: "conic-gradient(from 0deg, transparent 0deg, #22e1ff 40deg, transparent 90deg, transparent 180deg, #7c5cff 220deg, transparent 270deg)", maskImage: "radial-gradient(circle, black 0%, transparent 60%)", WebkitMaskImage: "radial-gradient(circle, black 0%, transparent 60%)" }}
       />
-      {/* light sweeps */}
-      <svg className="animate-sweep absolute -bottom-24 left-[-10%] w-[120%] opacity-90" viewBox="0 0 1600 520" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="sw1" x1="0" x2="1">
-            <stop offset="0" stopColor="#7dd3fc" stopOpacity="0" />
-            <stop offset=".5" stopColor="#e0f2fe" stopOpacity=".9" />
-            <stop offset="1" stopColor="#7dd3fc" stopOpacity="0" />
-          </linearGradient>
-          <filter id="blur6"><feGaussianBlur stdDeviation="6" /></filter>
-          <filter id="blur20"><feGaussianBlur stdDeviation="22" /></filter>
-        </defs>
-        <path d="M0 420 C 420 250, 900 520, 1600 210" stroke="url(#sw1)" strokeWidth="26" fill="none" filter="url(#blur20)" opacity=".55" />
-        <path d="M0 420 C 420 250, 900 520, 1600 210" stroke="url(#sw1)" strokeWidth="2.5" fill="none" />
-        <path d="M0 470 C 520 300, 980 560, 1600 300" stroke="url(#sw1)" strokeWidth="1.5" fill="none" opacity=".7" />
-        <path d="M0 360 C 380 230, 1000 470, 1600 150" stroke="url(#sw1)" strokeWidth="1" fill="none" opacity=".5" filter="url(#blur6)" />
-      </svg>
-      <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: "radial-gradient(#fff 1px, transparent 1px)", backgroundSize: "22px 22px" }} />
-      {dim && <div className="absolute inset-0 bg-ink-950/55" />}
+      {/* fine grid */}
+      <div
+        className="absolute inset-0 opacity-[0.05]"
+        style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.6) 1px, transparent 1px)", backgroundSize: "56px 56px", maskImage: "radial-gradient(ellipse at 50% 30%, black, transparent 75%)", WebkitMaskImage: "radial-gradient(ellipse at 50% 30%, black, transparent 75%)" }}
+      />
+      {dim && <div className="absolute inset-0 bg-ink-950/50" />}
     </div>
   );
 }
@@ -40,7 +30,7 @@ export function Background({ dim = false }: { dim?: boolean }) {
 /* ---------------- Brand ---------------- */
 
 export function Logo({ size = 64 }: { size?: number }) {
-  return <img src="/logo.svg" width={size} height={size} alt="NexoTV" className="drop-shadow-[0_8px_24px_rgba(56,189,248,0.45)]" draggable={false} />;
+  return <img src="/brand-mark.png" width={size} height={size} alt="HurricaneTV" className="object-contain drop-shadow-[0_8px_28px_rgba(34,225,255,0.35)]" draggable={false} />;
 }
 
 export function Clock({ align = "right" }: { align?: "left" | "right" }) {
@@ -54,7 +44,7 @@ export function Clock({ align = "right" }: { align?: "left" | "right" }) {
     <div className={cn("leading-tight", align === "right" ? "text-right" : "text-left")}>
       <div className="text-2xl font-semibold tabular-nums">{fmtTime(now, h24)}</div>
       <div className="text-xs font-medium tracking-wide text-sky-100/70 capitalize">
-        {new Date(now).toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long" })}
+        {new Date(now).toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" })}
       </div>
     </div>
   );
@@ -66,7 +56,7 @@ export function ScreenHeader({ title, icon, right, children }: { title: string; 
   const back = useApp((s) => s.back);
   return (
     <header className="flex h-[72px] shrink-0 items-center gap-4 border-b border-white/10 bg-ink-950/40 px-6 backdrop-blur-xl">
-      <button onClick={back} className="focusable grid size-10 place-items-center rounded-xl border border-white/15 bg-white/5 transition hover:bg-white/15" title="Voltar (Esc)">
+      <button onClick={back} className="focusable grid size-10 place-items-center rounded-xl border border-white/15 bg-white/5 transition hover:bg-white/15" title={t("Voltar (Esc)")}>
         <ArrowLeft className="size-5" />
       </button>
       <div className="flex items-center gap-3">
@@ -187,20 +177,24 @@ export function ChannelLogo({ src, name, className }: { src?: string; name: stri
     );
   return (
     <div className={cn("grid shrink-0 place-items-center rounded-lg text-xs font-extrabold tracking-wide", className)} style={{ background: `linear-gradient(135deg, ${a}, ${b})` }}>
-      {initials(name) || "TV"}
+      {initials(name) || t("TV")}
     </div>
   );
 }
 
-export function Poster({ src, name, className }: { src?: string; name: string; className?: string }) {
-  const [err, setErr] = useState(false);
+export function Poster({ src, fallback, name, className }: { src?: string; fallback?: string; name: string; className?: string }) {
+  // try src, then fallback, then a generated cover
+  const candidates = useMemo(() => [src, fallback].filter((x, i, a): x is string => !!x && a.indexOf(x) === i), [src, fallback]);
+  const [failed, setFailed] = useState(0);
+  useEffect(() => setFailed(0), [candidates]);
+  const cur = candidates[failed];
   const [a, b] = useMemo(() => palette[hash(name) % palette.length], [name]);
   return (
     <div className={cn("relative overflow-hidden bg-ink-800", className)}>
-      {src && !err ? (
-        <img src={src} alt="" loading="lazy" onError={() => setErr(true)} className="absolute inset-0 size-full object-cover" draggable={false} />
+      {cur ? (
+        <img key={cur} src={cur} alt="" loading="lazy" onError={() => setFailed((f) => f + 1)} className="absolute inset-0 size-full object-cover" draggable={false} />
       ) : (
-        <div className="absolute inset-0 flex flex-col justify-end p-3" style={{ background: `linear-gradient(160deg, ${a} 0%, ${b} 45%, #061433 100%)` }}>
+        <div className="absolute inset-0 flex flex-col justify-end p-3" style={{ background: `linear-gradient(160deg, ${a} 0%, ${b} 45%, #0b0d12 100%)` }}>
           <div className="absolute top-3 left-3 text-4xl font-black text-white/25">{initials(name)}</div>
           <div className="line-clamp-3 text-sm leading-tight font-bold">{name}</div>
         </div>
@@ -238,19 +232,22 @@ export function CategoryList({
   onSelect,
   extra,
   loading,
+  parental,
 }: {
   categories: { id: string; name: string; count?: number }[];
   active: string;
   onSelect: (id: string) => void;
   extra?: { id: string; name: string; icon?: ReactNode }[];
   loading?: boolean;
+  /** from useParental(): lock icons, PIN on open, lock toggles */
+  parental?: { enabled: boolean; unlocked: boolean; isLocked: (id: string) => boolean; guard: (id: string, fn: () => void) => void; toggle: (id: string) => void };
 }) {
   const [q, setQ] = useState("");
   const list = q ? categories.filter((c) => c.name.toLowerCase().includes(q.toLowerCase())) : categories;
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r border-white/10 bg-ink-950/35 backdrop-blur-xl">
       <div className="p-3">
-        <SearchBox value={q} onChange={setQ} placeholder="Filtrar categorias" />
+        <SearchBox value={q} onChange={setQ} placeholder={t("Filtrar categorias")} />
       </div>
       <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
         {extra?.map((c) => (
@@ -261,7 +258,15 @@ export function CategoryList({
         {extra?.length ? <div className="mx-3 my-2 h-px bg-white/10" /> : null}
         {loading && Array.from({ length: 10 }, (_, i) => <div key={i} className="skeleton mx-1 my-1 h-9 rounded-lg" />)}
         {list.map((c) => (
-          <CatButton key={c.id} active={active === c.id} onClick={() => onSelect(c.id)} count={c.count}>
+          <CatButton
+            key={c.id}
+            active={active === c.id}
+            onClick={() => (parental ? parental.guard(c.id, () => onSelect(c.id)) : onSelect(c.id))}
+            count={c.count}
+            locked={parental?.isLocked(c.id)}
+            unlocked={parental?.unlocked}
+            onLock={parental?.enabled ? () => parental.toggle(c.id) : undefined}
+          >
             {c.name}
           </CatButton>
         ))}
@@ -270,19 +275,50 @@ export function CategoryList({
   );
 }
 
-function CatButton({ active, onClick, children, count, icon }: { active: boolean; onClick: () => void; children: ReactNode; count?: number; icon?: ReactNode }) {
+function CatButton({
+  active,
+  onClick,
+  children,
+  count,
+  icon,
+  locked,
+  unlocked,
+  onLock,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  count?: number;
+  icon?: ReactNode;
+  locked?: boolean;
+  unlocked?: boolean;
+  onLock?: () => void;
+}) {
   return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "focusable flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] font-semibold transition",
-        active ? "bg-gradient-to-r from-sky-500/90 to-blue-600/90 text-white shadow-md shadow-blue-950/50" : "text-sky-50/75 hover:bg-white/8 hover:text-white",
+    <div className="group/cat relative">
+      <button
+        onClick={onClick}
+        className={cn(
+          "focusable flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] font-semibold transition",
+          active ? "bg-gradient-to-r from-sky-500/90 to-blue-600/90 text-white shadow-md shadow-blue-950/50" : "text-sky-50/75 hover:bg-white/8 hover:text-white",
+          onLock && "pr-9",
+        )}
+      >
+        {icon}
+        {locked && (unlocked ? <LockOpen className="size-3.5 shrink-0 text-amber-300/80" /> : <Lock className="size-3.5 shrink-0 text-amber-300" />)}
+        <span className="flex-1 truncate">{children}</span>
+        {count != null && <span className={cn("text-[11px] tabular-nums transition", active ? "text-white/80" : "text-sky-100/40", onLock && "group-hover/cat:opacity-0")}>{count}</span>}
+      </button>
+      {onLock && (
+        <button
+          onClick={onLock}
+          title={locked ? t("Desbloquear categoria") : t("Bloquear com PIN")}
+          className="absolute top-1/2 right-1.5 grid size-7 -translate-y-1/2 place-items-center rounded-md text-sky-100/50 opacity-0 transition group-hover/cat:opacity-100 hover:bg-white/10 hover:text-amber-300"
+        >
+          {locked ? <LockOpen className="size-3.5" /> : <Lock className="size-3.5" />}
+        </button>
       )}
-    >
-      {icon}
-      <span className="flex-1 truncate">{children}</span>
-      {count != null && <span className={cn("text-[11px] tabular-nums", active ? "text-white/80" : "text-sky-100/40")}>{count}</span>}
-    </button>
+    </div>
   );
 }
 
@@ -303,4 +339,46 @@ export function useIncremental<T>(items: T[], step = 120) {
     if (el.scrollTop + el.clientHeight > el.scrollHeight - 600 && n < items.length) setN((x) => x + step);
   };
   return { visible: items.slice(0, n), onScroll };
+}
+
+/** IMDb-style rating badge */
+export function ImdbBadge({ value, size = "sm" }: { value?: number; size?: "sm" | "lg" }) {
+  if (!value) return null;
+  return (
+    <span className={cn("inline-flex items-center overflow-hidden rounded-md font-black shadow-md shadow-black/40", size === "lg" ? "text-sm" : "text-[11px]")}>
+      <span className={cn("bg-[#f5c518] text-black", size === "lg" ? "px-2 py-1" : "px-1.5 py-0.5")}>{t("IMDb")}</span>
+      <span className={cn("bg-black/75 text-white tabular-nums backdrop-blur", size === "lg" ? "px-2 py-1" : "px-1.5 py-0.5")}>{value.toFixed(1)}</span>
+    </span>
+  );
+}
+
+export function CastRow({ cast }: { cast: { name: string; character?: string; photo?: string }[] }) {
+  if (!cast.length) return null;
+  return (
+    <div className="flex gap-3 overflow-x-auto pb-2">
+      {cast.map((c) => (
+        <div key={c.name + (c.character ?? "")} className="w-24 shrink-0 text-center">
+          <Avatar src={c.photo} name={c.name} />
+          <div className="mt-1.5 line-clamp-2 text-xs leading-tight font-semibold">{c.name}</div>
+          {c.character && <div className="truncate text-[10px] text-sky-100/45">{c.character}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Avatar({ src, name }: { src?: string; name: string }) {
+  const [err, setErr] = useState(false);
+  const [a, b] = palette[hash(name) % palette.length];
+  return (
+    <div className="mx-auto size-20 overflow-hidden rounded-full shadow-lg shadow-black/40 ring-2 ring-white/10">
+      {src && !err ? (
+        <img src={src} alt="" loading="lazy" onError={() => setErr(true)} className="size-full object-cover" draggable={false} />
+      ) : (
+        <div className="grid size-full place-items-center text-lg font-extrabold" style={{ background: `linear-gradient(135deg, ${a}, ${b})` }}>
+          {initials(name)}
+        </div>
+      )}
+    </div>
+  );
 }

@@ -33,6 +33,8 @@ export interface Channel {
   catchup?: boolean;
   catchupDays?: number;
   isRadio?: boolean;
+  ua?: string;
+  referer?: string;
   /** direct stream url (xtream / m3u) or stalker cmd */
   stream: string;
 }
@@ -46,6 +48,8 @@ export interface VodItem {
   year?: string;
   ext?: string;
   stream: string;
+  ua?: string;
+  referer?: string;
 }
 
 export interface VodInfo {
@@ -78,6 +82,8 @@ export interface Episode {
   image?: string;
   duration?: string;
   stream: string;
+  ua?: string;
+  referer?: string;
 }
 
 export interface SeriesInfo {

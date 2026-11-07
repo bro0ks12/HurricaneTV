@@ -2,6 +2,7 @@ import { Expand, History, LayoutList, Radio, Star, Tv } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { CategoryList, ChannelLogo, Empty, Pill, ProgressBar, ScreenHeader, SearchBox, Spinner, useIncremental } from "../components/ui";
 import { VideoSurface } from "../components/VideoSurface";
+import { useParental } from "../lib/parental";
 import { useQuery } from "../lib/query";
 import { isAdult } from "../lib/settings";
 import type { Channel } from "../lib/types";
@@ -9,6 +10,7 @@ import { cn, fmtTime, progress } from "../lib/util";
 import { STALKER_UA } from "../providers/stalker";
 import { useApp, useFavs, useProfile, useProvider } from "../store/app";
 
+import { t, tn } from "../lib/i18n";
 export function Live({ radio = false }: { radio?: boolean }) {
   const profile = useProfile()!;
   const provider = useProvider()!;
@@ -21,6 +23,7 @@ export function Live({ radio = false }: { radio?: boolean }) {
   const [sel, setSel] = useState<Channel | null>(null);
 
   const cats = useQuery(`live-cats:${profile.id}`, () => provider.liveCategories());
+  const par = useParental("live", cats.data);
   const all = useQuery(`live-all:${profile.id}`, () => provider.liveChannels());
 
   const categories = useMemo(() => {
@@ -37,6 +40,7 @@ export function Live({ radio = false }: { radio?: boolean }) {
     let list: Channel[] = cat === "__fav" ? favs.live : (all.data ?? []);
     if (radio) list = list.filter((c) => c.isRadio);
     if (cat !== "__all" && cat !== "__fav") list = list.filter((c) => c.categoryId === cat);
+    if (par.hidden.size) list = list.filter((c) => !par.hidden.has(c.categoryId ?? ""));
     if (settings.hideAdult && cat === "__all") {
       const adult = new Set((cats.data ?? []).filter((x) => isAdult(x.name)).map((x) => x.id));
       list = list.filter((c) => !adult.has(c.categoryId ?? ""));
@@ -46,13 +50,13 @@ export function Live({ radio = false }: { radio?: boolean }) {
       list = list.filter((c) => c.name.toLowerCase().includes(s) || String(c.num) === s);
     }
     return list;
-  }, [cat, all.data, favs.live, q, radio, settings.hideAdult, cats.data]);
+  }, [cat, all.data, favs.live, q, radio, settings.hideAdult, cats.data, par.hidden]);
 
   const { visible, onScroll } = useIncremental(channels, 150);
 
   const open = (ch: Channel) => {
     const index = channels.findIndex((c) => c.id === ch.id);
-    play({ title: ch.name, stream: ch.stream, type: "live", channels, index, poster: ch.logo });
+    play({ title: ch.name, stream: ch.stream, type: "live", channels, index, poster: ch.logo, ua: ch.ua, referer: ch.referer });
   };
 
   const counts: Record<string, number> = useMemo(() => {
@@ -63,29 +67,30 @@ export function Live({ radio = false }: { radio?: boolean }) {
 
   return (
     <div className="flex h-full flex-col">
-      <ScreenHeader title={radio ? "Rádio" : "TV em Direto"} icon={radio ? <Radio className="size-5" /> : <Tv className="size-5" />}>
-        <SearchBox value={q} onChange={setQ} placeholder="Pesquisar canal ou número…" className="w-80" />
-        <Pill tone="slate">{channels.length} canais</Pill>
+      <ScreenHeader title={radio ? t("Rádio") : t("TV em Direto")} icon={radio ? <Radio className="size-5" /> : <Tv className="size-5" />}>
+        <SearchBox value={q} onChange={setQ} placeholder={t("Pesquisar canal ou número…")} className="w-80" />
+        <Pill tone="slate">{tn(channels.length, "1 canal", "{n} canais")}</Pill>
       </ScreenHeader>
       <div className="flex min-h-0 flex-1">
         <CategoryList
+          parental={par}
           loading={cats.loading}
           categories={categories.map((c) => ({ ...c, count: counts[c.id] }))}
           active={cat}
           onSelect={setCat}
           extra={[
-            { id: "__all", name: "Todos os canais", icon: <LayoutList className="size-4" /> },
-            { id: "__fav", name: "Favoritos", icon: <Star className="size-4" /> },
+            { id: "__all", name: t("Todos os canais"), icon: <LayoutList className="size-4" /> },
+            { id: "__fav", name: t("Favoritos"), icon: <Star className="size-4" /> },
           ]}
         />
 
         <div className="flex min-w-0 flex-1 flex-col border-r border-white/10 bg-ink-950/20">
           {all.loading ? (
-            <Spinner label="A carregar canais…" />
+            <Spinner label={t("A carregar canais…")} />
           ) : all.error ? (
-            <Empty title="Não foi possível carregar os canais" hint={all.error} />
+            <Empty title={t("Não foi possível carregar os canais")} hint={all.error} />
           ) : !channels.length ? (
-            <Empty icon={<Tv className="size-6" />} title="Sem canais" hint={cat === "__fav" ? "Marca canais com a estrela para os veres aqui." : "Esta categoria está vazia."} />
+            <Empty icon={<Tv className="size-6" />} title={t("Sem canais")} hint={cat === "__fav" ? t("Marca canais com a estrela para os veres aqui.") : t("Esta categoria está vazia.")} />
           ) : (
             <div className="flex-1 overflow-y-auto p-2" onScroll={onScroll}>
               {visible.map((ch) => (
@@ -103,7 +108,7 @@ export function Live({ radio = false }: { radio?: boolean }) {
           )}
         </div>
 
-        <Preview channel={sel} onOpen={() => sel && open(sel)} autoplay={settings.autoplayPreview} ua={profile.kind === "stalker" ? STALKER_UA : undefined} />
+        <Preview channel={sel} onOpen={() => sel && open(sel)} autoplay={settings.autoplayPreview} stalker={profile.kind === "stalker"} />
       </div>
     </div>
   );
@@ -125,7 +130,7 @@ function ChannelRow({ ch, active, fav, onSelect, onOpen, onFav }: { ch: Channel;
           <span className="flex items-center gap-1.5 text-[11px] text-sky-100/45">
             {ch.catchup && (
               <span className="inline-flex items-center gap-1 text-emerald-300/80">
-                <History className="size-3" /> Catch-up
+                <History className="size-3" /> {t("Catch-up")}
               </span>
             )}
           </span>
@@ -138,7 +143,9 @@ function ChannelRow({ ch, active, fav, onSelect, onOpen, onFav }: { ch: Channel;
   );
 }
 
-function Preview({ channel, onOpen, autoplay, ua }: { channel: Channel | null; onOpen: () => void; autoplay: boolean; ua?: string }) {
+function Preview({ channel, onOpen, autoplay, stalker }: { channel: Channel | null; onOpen: () => void; autoplay: boolean; stalker: boolean }) {
+  // release the connection while the fullscreen player is open (many accounts allow only 1)
+  const playerOpen = useApp((s) => !!s.playing);
   const provider = useProvider()!;
   const h24 = useApp((s) => s.settings.timeFormat24);
   const [url, setUrl] = useState<string | null>(null);
@@ -147,7 +154,8 @@ function Preview({ channel, onOpen, autoplay, ua }: { channel: Channel | null; o
 
   useEffect(() => {
     setUrl(null);
-    if (!channel || !autoplay) return;
+    setState("loading");
+    if (!channel || !autoplay || playerOpen) return;
     let alive = true;
     const t = setTimeout(() => {
       provider
@@ -159,12 +167,12 @@ function Preview({ channel, onOpen, autoplay, ua }: { channel: Channel | null; o
       alive = false;
       clearTimeout(t);
     };
-  }, [channel, autoplay, provider]);
+  }, [channel, autoplay, provider, playerOpen]);
 
   if (!channel)
     return (
       <div className="hidden w-[38%] max-w-[620px] shrink-0 xl:block">
-        <Empty icon={<Tv className="size-6" />} title="Escolhe um canal" hint="Seleciona um canal para pré-visualizar. Clica de novo (ou Enter) para ver em ecrã inteiro." />
+        <Empty icon={<Tv className="size-6" />} title={t("Escolhe um canal")} hint={t("Seleciona um canal para pré-visualizar. Clica de novo (ou Enter) para ver em ecrã inteiro.")} />
       </div>
     );
 
@@ -173,36 +181,36 @@ function Preview({ channel, onOpen, autoplay, ua }: { channel: Channel | null; o
     <div className="flex w-[38%] max-w-[620px] shrink-0 flex-col bg-ink-950/30">
       <button onClick={onOpen} className="focusable group relative aspect-video w-full overflow-hidden bg-black">
         {url ? (
-          <VideoSurface url={url} live muted={false} ua={ua} onStatus={(s) => setState(s.state)} />
+          <VideoSurface url={url} live muted={false} headers={{ ua: channel.ua ?? (stalker ? STALKER_UA : undefined), referer: channel.referer }} onStatus={(s) => setState(s.state)} />
         ) : (
           <div className="grid size-full place-items-center">
             <ChannelLogo src={channel.logo} name={channel.name} className="size-24 text-2xl" />
           </div>
         )}
         {url && state === "loading" && <div className="absolute inset-0 grid place-items-center bg-black/30"><Spinner /></div>}
-        {state === "error" && <div className="absolute inset-0 grid place-items-center bg-black/60 text-sm text-rose-200">Stream indisponível</div>}
+        {state === "error" && <div className="absolute inset-0 grid place-items-center bg-black/60 text-sm text-rose-200">{t("Stream indisponível")}</div>}
         <span className="absolute right-3 bottom-3 inline-flex items-center gap-1.5 rounded-lg bg-black/60 px-2.5 py-1.5 text-xs font-bold opacity-0 backdrop-blur transition group-hover:opacity-100 group-focus-visible:opacity-100">
-          <Expand className="size-3.5" /> Ecrã inteiro
+          <Expand className="size-3.5" /> {t("Ecrã inteiro")}
         </span>
       </button>
       <div className="flex items-center gap-3 border-b border-white/10 p-4">
         <ChannelLogo src={channel.logo} name={channel.name} className="size-12" />
         <div className="min-w-0">
           <div className="truncate text-lg font-bold">{channel.name}</div>
-          <div className="text-xs text-sky-100/50">{channel.num ? `Canal ${channel.num}` : "Canal"}</div>
+          <div className="text-xs text-sky-100/50">{channel.num ? t("Canal {0}", { 0: channel.num }) : t("Canal")}</div>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-3">
-        <div className="mb-2 px-1 text-[11px] font-bold tracking-widest text-sky-100/50 uppercase">Programação</div>
+        <div className="mb-2 px-1 text-[11px] font-bold tracking-widest text-sky-100/50 uppercase">{t("Programação")}</div>
         {epg.loading && Array.from({ length: 4 }, (_, i) => <div key={i} className="skeleton mb-2 h-14 rounded-xl" />)}
-        {!epg.loading && !epg.data?.length && <div className="px-1 py-6 text-center text-sm text-sky-100/40">Sem informação de EPG.</div>}
+        {!epg.loading && !epg.data?.length && <div className="px-1 py-6 text-center text-sm text-sky-100/40">{t("Sem informação de EPG.")}</div>}
         {epg.data?.map((p, i) => {
           const live = p.start <= now && p.end > now;
           return (
             <div key={i} className={cn("mb-1.5 rounded-xl p-3", live ? "bg-sky-400/10 ring-1 ring-sky-400/30" : "bg-white/[0.03]")}>
               <div className="flex items-center gap-2 text-xs text-sky-100/60 tabular-nums">
                 {fmtTime(p.start, h24)} – {fmtTime(p.end, h24)}
-                {live && <span className="rounded bg-rose-600 px-1.5 text-[10px] font-black tracking-wider text-white">AGORA</span>}
+                {live && <span className="rounded bg-rose-600 px-1.5 text-[10px] font-black tracking-wider text-white">{t("AGORA")}</span>}
               </div>
               <div className="mt-0.5 truncate text-sm font-semibold">{p.title}</div>
               {live && <ProgressBar value={progress(p)} className="mt-2" />}

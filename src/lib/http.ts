@@ -39,10 +39,71 @@ export async function initProxy() {
   if (inTauri && proxyPort == null) proxyPort = await invoke<number>("proxy_port");
 }
 
+export interface StreamHeaders {
+  ua?: string;
+  referer?: string;
+}
+
 /** Wrap a stream url so hls.js / mpegts.js can read it without CORS issues. */
-export function proxied(url: string, ua?: string): string {
+export function proxied(url: string, h?: StreamHeaders, live = false): string {
   if (!inTauri || !proxyPort) return url;
   let s = `http://127.0.0.1:${proxyPort}/p?u=${encodeURIComponent(url)}`;
-  if (ua) s += `&ua=${encodeURIComponent(ua)}`;
+  if (h?.ua) s += `&ua=${encodeURIComponent(h.ua)}`;
+  if (h?.referer) s += `&ref=${encodeURIComponent(h.referer)}`;
+  if (live) s += "&live=1";
   return s;
+}
+
+export interface ProbeResult {
+  kind: "hls" | "ts" | "mp4" | "mkv" | "other";
+  status: number;
+  content_type: string;
+}
+
+/** Sniff the first bytes of a stream (Tauri only). */
+export async function probeStream(url: string, h?: StreamHeaders): Promise<ProbeResult | null> {
+  if (!inTauri) return null;
+  try {
+    return await invoke<ProbeResult>("probe_stream", { url, ua: h?.ua ?? null, referer: h?.referer ?? null });
+  } catch {
+    return null;
+  }
+}
+
+/** Open in VLC / mpv. Returns the player path used. */
+export async function openExternal(url: string, title: string, h?: StreamHeaders, player?: string): Promise<string> {
+  if (!inTauri) {
+    window.open(url, "_blank");
+    return "browser";
+  }
+  return invoke<string>("open_external", { url, title, ua: h?.ua ?? null, referer: h?.referer ?? null, player: player || null });
+}
+
+export interface MkvTrack {
+  number: number;
+  codec: string;
+  lang: string;
+  name: string;
+  default: boolean;
+  forced: boolean;
+  text: boolean;
+}
+
+/** Subtitle tracks the proxy has found inside an MKV stream (Tauri only). */
+export async function mkvTracks(url: string): Promise<MkvTrack[]> {
+  if (!inTauri) return [];
+  try {
+    return await invoke<MkvTrack[]>("mkv_tracks", { url });
+  } catch {
+    return [];
+  }
+}
+
+export async function mkvCues(url: string, track: number): Promise<{ start: number; end: number; text: string }[]> {
+  if (!inTauri) return [];
+  try {
+    return await invoke("mkv_cues", { url, track });
+  } catch {
+    return [];
+  }
 }

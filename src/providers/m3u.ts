@@ -5,6 +5,27 @@ interface Entry {
   name: string;
   attrs: Record<string, string>;
   url: string;
+  ua?: string;
+  referer?: string;
+}
+
+/** Kodi-style "url|User-Agent=x&Referer=y" header suffix */
+function splitPipe(raw: string): { url: string; ua?: string; referer?: string } {
+  const i = raw.indexOf("|");
+  if (i < 0) return { url: raw };
+  const out: { url: string; ua?: string; referer?: string } = { url: raw.slice(0, i) };
+  for (const kv of raw.slice(i + 1).split("&")) {
+    const [k, ...rest] = kv.split("=");
+    let v = rest.join("=");
+    try {
+      v = decodeURIComponent(v);
+    } catch {
+      /* keep raw */
+    }
+    if (/^user-agent$/i.test(k)) out.ua = v;
+    if (/^referr?er$/i.test(k)) out.referer = v;
+  }
+  return out;
 }
 
 interface Parsed {
@@ -26,6 +47,8 @@ function parseM3u(text: string): { header: Record<string, string>; entries: Entr
   const header: Record<string, string> = {};
   const entries: Entry[] = [];
   let cur: Omit<Entry, "url"> | null = null;
+  // #EXTVLCOPT may come before or after #EXTINF
+  let pending: { ua?: string; referer?: string } = {};
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
@@ -38,11 +61,30 @@ function parseM3u(text: string): { header: Record<string, string>; entries: Entr
       const meta = commaIdx >= 0 ? line.slice(0, commaIdx) : line;
       for (const m of meta.matchAll(ATTR)) attrs[m[1].toLowerCase()] = m[2];
       const name = commaIdx >= 0 ? line.slice(commaIdx + 1).trim() : attrs["tvg-name"] || "Sem nome";
-      cur = { name, attrs };
+      cur = { name, attrs, ...pending };
+      pending = {};
+      if (attrs["user-agent"]) cur.ua = attrs["user-agent"];
+      if (attrs["http-referrer"] || attrs["referer"]) cur.referer = attrs["http-referrer"] || attrs["referer"];
+    } else if (line.startsWith("#EXTVLCOPT:")) {
+      const [k, ...rest] = line.slice(11).split("=");
+      const v = rest.join("=").trim();
+      const tgt = cur ?? pending;
+      if (/http-user-agent/i.test(k)) tgt.ua = v;
+      if (/http-referr?er/i.test(k)) tgt.referer = v;
+    } else if (line.startsWith("#EXTHTTP:")) {
+      try {
+        const j = JSON.parse(line.slice(9));
+        const tgt = cur ?? pending;
+        tgt.ua = j["User-Agent"] ?? j["user-agent"] ?? tgt.ua;
+        tgt.referer = j["Referer"] ?? j["referer"] ?? tgt.referer;
+      } catch {
+        /* ignore */
+      }
     } else if (line.startsWith("#EXTGRP:") && cur) {
       cur.attrs["group-title"] ||= line.slice(8).trim();
     } else if (!line.startsWith("#") && cur) {
-      entries.push({ ...cur, url: line });
+      const p = splitPipe(line);
+      entries.push({ ...cur, url: p.url, ua: p.ua ?? cur.ua, referer: p.referer ?? cur.referer });
       cur = null;
     }
   }
@@ -85,9 +127,11 @@ function build(text: string): Parsed {
         title: e.name,
         image: logo,
         stream: e.url,
+        ua: e.ua,
+        referer: e.referer,
       });
     } else if (isVod) {
-      vod.push({ id: String(idx), name: e.name, poster: logo, categoryId: group, stream: e.url });
+      vod.push({ id: String(idx), name: e.name, poster: logo, categoryId: group, stream: e.url, ua: e.ua, referer: e.referer });
     } else {
       n++;
       live.push({
@@ -101,6 +145,8 @@ function build(text: string): Parsed {
         catchupDays: Number(e.attrs["catchup-days"] || e.attrs["timeshift"]) || undefined,
         isRadio: e.attrs["radio"] === "true" || /radio/i.test(group),
         stream: e.url,
+        ua: e.ua,
+        referer: e.referer,
       });
       catchupInfo.set(String(idx), { mode: e.attrs["catchup"] || "default", source: e.attrs["catchup-source"] });
     }

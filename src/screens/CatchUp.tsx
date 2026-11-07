@@ -6,6 +6,7 @@ import type { Channel, Program } from "../lib/types";
 import { cn, fmtDay, fmtTime } from "../lib/util";
 import { useApp, useProfile, useProvider } from "../store/app";
 
+import { t, tn } from "../lib/i18n";
 export function CatchUp() {
   const profile = useProfile()!;
   const provider = useProvider()!;
@@ -19,14 +20,14 @@ export function CatchUp() {
 
   return (
     <div className="flex h-full flex-col">
-      <ScreenHeader title="Catch Up" icon={<History className="size-5" />}>
-        <SearchBox value={q} onChange={setQ} placeholder="Pesquisar canal…" className="w-80" />
-        <Pill tone="slate">{channels.length} canais com arquivo</Pill>
+      <ScreenHeader title={t("Catch Up")} icon={<History className="size-5" />}>
+        <SearchBox value={q} onChange={setQ} placeholder={t("Pesquisar canal…")} className="w-80" />
+        <Pill tone="slate">{tn(channels.length, "1 canal com arquivo", "{n} canais com arquivo")}</Pill>
       </ScreenHeader>
       <div className="flex min-h-0 flex-1">
         <div className="w-80 shrink-0 overflow-y-auto border-r border-white/10 bg-ink-950/35 p-2">
           {all.loading && <Spinner />}
-          {!all.loading && !channels.length && <Empty title="Sem canais com arquivo" hint="O teu fornecedor não disponibiliza catch-up nestes canais." />}
+          {!all.loading && !channels.length && <Empty title={t("Sem canais com arquivo")} hint={t("O teu fornecedor não disponibiliza catch-up nestes canais.")} />}
           {channels.map((ch) => (
             <button
               key={ch.id}
@@ -36,12 +37,12 @@ export function CatchUp() {
               <ChannelLogo src={ch.logo} name={ch.name} className="size-10" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold">{ch.name}</span>
-                {ch.catchupDays ? <span className="text-[11px] text-emerald-300/80">{ch.catchupDays} dias de arquivo</span> : null}
+                {ch.catchupDays ? <span className="text-[11px] text-emerald-300/80">{tn(ch.catchupDays, "1 dia de arquivo", "{n} dias de arquivo")}</span> : null}
               </span>
             </button>
           ))}
         </div>
-        <div className="min-w-0 flex-1 overflow-y-auto p-6">{sel ? <Archive ch={sel} /> : <Empty icon={<History className="size-6" />} title="Escolhe um canal" hint="Vê programas que já passaram nos últimos dias." />}</div>
+        <div className="min-w-0 flex-1 overflow-y-auto p-6">{sel ? <Archive ch={sel} /> : <Empty icon={<History className="size-6" />} title={t("Escolhe um canal")} hint={t("Vê programas que já passaram nos últimos dias.")} />}</div>
       </div>
     </div>
   );
@@ -65,12 +66,12 @@ function Archive({ ch }: { ch: Channel }) {
 
   const open = async (p: Program) => {
     const url = await provider.catchupUrl!(ch, p);
-    play({ title: ch.name, subtitle: `${p.title} · ${fmtDay(p.start)} ${fmtTime(p.start, h24)}`, stream: url, type: "url", poster: ch.logo });
+    play({ title: ch.name, subtitle: `${p.title} · ${fmtDay(p.start)} ${fmtTime(p.start, h24)}`, stream: url, type: "url", poster: ch.logo, ua: ch.ua, referer: ch.referer });
   };
 
-  if (arch.loading) return <Spinner label="A carregar arquivo…" />;
-  if (arch.error) return <Empty title="Erro" hint={arch.error} />;
-  if (!groups.length) return <Empty icon={<History className="size-6" />} title="Arquivo vazio" hint="Não há programas disponíveis para este canal." />;
+  if (arch.loading) return <Spinner label={t("A carregar arquivo…")} />;
+  if (arch.error) return <Empty title={t("Erro")} hint={arch.error} />;
+  if (!groups.length) return <Empty icon={<History className="size-6" />} title={t("Arquivo vazio")} hint={t("Não há programas disponíveis para este canal.")} />;
 
   return (
     <div className="space-y-6">

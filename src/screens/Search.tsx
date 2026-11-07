@@ -1,9 +1,11 @@
 import { Clapperboard, Film, Search as SearchIcon, Tv } from "lucide-react";
 import { useDeferredValue, useMemo, useState } from "react";
 import { ChannelLogo, Empty, Poster, ScreenHeader, SearchBox } from "../components/ui";
+import { useParental } from "../lib/parental";
 import { useQuery } from "../lib/query";
 import { useApp, useProfile, useProvider } from "../store/app";
 
+import { t } from "../lib/i18n";
 export function Search() {
   const profile = useProfile()!;
   const provider = useProvider()!;
@@ -17,31 +19,39 @@ export function Search() {
   const vod = useQuery(profile.kind === "stalker" ? null : `vod-items:${profile.id}:all`, () => provider.vodItems());
   const series = useQuery(profile.kind === "stalker" ? null : `series-items:${profile.id}:all`, () => provider.seriesItems());
 
+  const cheap = profile.kind !== "stalker";
+  const liveCats = useQuery(`live-cats:${profile.id}`, () => provider.liveCategories());
+  const vodCats = useQuery(cheap ? `vod-cats:${profile.id}` : null, () => provider.vodCategories());
+  const seriesCats = useQuery(cheap ? `series-cats:${profile.id}` : null, () => provider.seriesCategories());
+  const pL = useParental("live", liveCats.data);
+  const pV = useParental("vod", vodCats.data);
+  const pS = useParental("series", seriesCats.data);
   const res = useMemo(() => {
     if (dq.length < 2) return null;
     const f = <T extends { name: string }>(l?: T[]) => (l ?? []).filter((x) => x.name.toLowerCase().includes(dq)).slice(0, 30);
-    return { live: f(live.data), vod: f(vod.data), series: f(series.data) };
-  }, [dq, live.data, vod.data, series.data]);
+    const ok = (hidden: Set<string>) => (x: { categoryId?: string }) => !hidden.has(x.categoryId ?? "");
+    return { live: f(live.data?.filter(ok(pL.hidden))), vod: f(vod.data?.filter(ok(pV.hidden))), series: f(series.data?.filter(ok(pS.hidden))) };
+  }, [dq, live.data, vod.data, series.data, pL.hidden, pV.hidden, pS.hidden]);
 
   return (
     <div className="flex h-full flex-col">
-      <ScreenHeader title="Pesquisar" icon={<SearchIcon className="size-5" />}>
+      <ScreenHeader title={t("Pesquisar")} icon={<SearchIcon className="size-5" />}>
         <div className="w-[480px]" onFocus={(e) => e.currentTarget.querySelector("input")?.select()}>
-          <SearchBox value={q} onChange={setQ} placeholder="Canais, filmes e séries…" />
+          <SearchBox value={q} onChange={setQ} placeholder={t("Canais, filmes e séries…")} />
         </div>
       </ScreenHeader>
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         {!res ? (
-          <Empty icon={<SearchIcon className="size-6" />} title="Pesquisa em todo o catálogo" hint="Escreve pelo menos 2 letras." />
+          <Empty icon={<SearchIcon className="size-6" />} title={t("Pesquisa em todo o catálogo")} hint={t("Escreve pelo menos 2 letras.")} />
         ) : !res.live.length && !res.vod.length && !res.series.length ? (
-          <Empty title="Sem resultados" hint={`Nada encontrado para «${q}».`} />
+          <Empty title={t("Sem resultados")} hint={t("Nada encontrado para «{0}».", { 0: q })} />
         ) : (
           <div className="space-y-8">
             {res.live.length > 0 && (
-              <Group icon={<Tv className="size-4" />} title="Canais">
+              <Group icon={<Tv className="size-4" />} title={t("Canais")}>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2">
                   {res.live.map((c, i) => (
-                    <button key={c.id} onClick={() => play({ title: c.name, stream: c.stream, type: "live", channels: res.live, index: i, poster: c.logo })} className="focusable glass flex items-center gap-3 rounded-xl p-2.5 text-left hover:bg-white/10">
+                    <button key={c.id} onClick={() => play({ title: c.name, stream: c.stream, type: "live", channels: res.live, index: i, poster: c.logo, ua: c.ua, referer: c.referer })} className="focusable glass flex items-center gap-3 rounded-xl p-2.5 text-left hover:bg-white/10">
                       <ChannelLogo src={c.logo} name={c.name} className="size-10" />
                       <span className="truncate text-sm font-semibold">{c.name}</span>
                     </button>
@@ -50,12 +60,12 @@ export function Search() {
               </Group>
             )}
             {res.vod.length > 0 && (
-              <Group icon={<Film className="size-4" />} title="Filmes">
-                <Row items={res.vod} onClick={(it) => play({ title: it.name, stream: (it as { stream: string }).stream, type: "vod", poster: it.poster })} />
+              <Group icon={<Film className="size-4" />} title={t("Filmes")}>
+                <Row items={res.vod} onClick={(it) => play({ title: it.name, stream: (it as { stream: string }).stream, type: "vod", poster: it.poster, ua: (it as { ua?: string }).ua, referer: (it as { referer?: string }).referer })} />
               </Group>
             )}
             {res.series.length > 0 && (
-              <Group icon={<Clapperboard className="size-4" />} title="Séries">
+              <Group icon={<Clapperboard className="size-4" />} title={t("Séries")}>
                 <Row items={res.series} onClick={() => go("series")} />
               </Group>
             )}

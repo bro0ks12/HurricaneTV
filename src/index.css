@@ -1,23 +1,58 @@
 @import "tailwindcss";
-@import "@fontsource-variable/manrope";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/space-grotesk";
 
+/* Theme "Tempestade": graphite + electric cyan -> violet.
+   The sky/blue/ink scales are remapped so every screen picks it up. */
 @theme {
-  --font-sans: "Manrope Variable", system-ui, sans-serif;
-  --color-ink-950: #030b22;
-  --color-ink-900: #061433;
-  --color-ink-800: #0a1f4d;
-  --color-ink-700: #0f2c6b;
-  --color-sky-glow: #38bdf8;
-  --color-brand: #1d8bff;
-  --color-brand-strong: #0a66f0;
+  --font-sans: "Inter Variable", system-ui, sans-serif;
+  --font-display: "Space Grotesk Variable", "Inter Variable", system-ui, sans-serif;
+
+  --color-ink-950: #07080c;
+  --color-ink-900: #0b0d12;
+  --color-ink-800: #141821;
+  --color-ink-700: #1c2130;
+
+  /* neutrals used for text tints */
+  --color-sky-50: #f3f6fb;
+  --color-sky-100: #dfe5ef;
+  /* electric cyan accent */
+  --color-sky-200: #a8f4ff;
+  --color-sky-300: #5fecff;
+  --color-sky-400: #22e1ff;
+  --color-sky-500: #07c3e6;
+  --color-sky-600: #0898b8;
+  --color-sky-700: #0b7690;
+  --color-sky-800: #0e5568;
+  --color-sky-900: #0c3a48;
+  --color-sky-950: #062530;
+  /* violet (second half of the gradient) */
+  --color-blue-300: #b9a8ff;
+  --color-blue-400: #9b84ff;
+  --color-blue-500: #8a6dff;
+  --color-blue-600: #7c5cff;
+  --color-blue-700: #6544f0;
+  --color-blue-800: #4a2fc0;
+  --color-blue-900: #2a1b70;
+  --color-blue-950: #170f40;
+
+  --color-storm-cyan: #22e1ff;
+  --color-storm-violet: #7c5cff;
 }
 
 :root {
   color-scheme: dark;
-  --tile-border: rgba(255, 255, 255, 0.85);
-  --glass: rgba(10, 31, 77, 0.55);
-  --glass-strong: rgba(6, 20, 51, 0.82);
-  --line: rgba(148, 197, 255, 0.16);
+  --glass: rgba(20, 24, 33, 0.72);
+  --glass-strong: rgba(11, 13, 18, 0.9);
+  --line: rgba(160, 175, 205, 0.12);
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
 }
 
 html,
@@ -37,7 +72,7 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 197, 255, 0.25) transparent;
+  scrollbar-color: rgba(160, 175, 205, 0.22) transparent;
 }
 
 input,
@@ -52,9 +87,9 @@ textarea {
 }
 .focusable:focus-visible {
   box-shadow:
-    0 0 0 2px #fff,
-    0 0 0 6px rgba(56, 189, 248, 0.55),
-    0 12px 40px -8px rgba(56, 189, 248, 0.6);
+    0 0 0 2px #22e1ff,
+    0 0 0 5px rgba(34, 225, 255, 0.18),
+    0 10px 36px -8px rgba(34, 225, 255, 0.55);
 }
 
 .glass {
@@ -121,4 +156,55 @@ textarea {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Subtitles (native WebVTT rendering) */
+video::cue {
+  font-family: var(--font-sans);
+  font-size: 1.7vh;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #fff;
+  background: var(--sub-bg, rgba(0, 0, 0, 0.62));
+  text-shadow:
+    0 0 4px rgba(0, 0, 0, 0.9),
+    0 2px 3px rgba(0, 0, 0, 0.9);
+}
+
+[data-player] video::cue {
+  font-size: calc(var(--sub-scale, 1) * 3.6vh);
+}
+
+/* Storm accents */
+.text-gradient {
+  background: linear-gradient(90deg, #22e1ff, #7c5cff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.bg-storm {
+  background-image: linear-gradient(110deg, #22e1ff 0%, #4fb2ff 35%, #7c5cff 100%);
+}
+@keyframes storm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-storm {
+  animation: storm-spin 90s linear infinite;
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-10px);
+  }
+  40%,
+  80% {
+    transform: translateX(10px);
+  }
 }

@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    nexotv_lib::run()
+    hurricanetv_lib::run()
 }

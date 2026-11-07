@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "NexoTV",
-  "version": "0.1.0",
-  "identifier": "com.nexotv.app",
+  "productName": "HurricaneTV",
+  "version": "0.3.0",
+  "identifier": "com.hurricanetv.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1430",
@@ -13,20 +13,62 @@
     "windows": [
       {
         "label": "main",
-        "title": "NexoTV",
+        "title": "HurricaneTV",
         "width": 1366,
         "height": 800,
         "minWidth": 1024,
         "minHeight": 640,
         "center": true,
-        "backgroundColor": "#061433"
+        "backgroundColor": "#07080c",
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --enable-blink-features=AudioVideoTracks --autoplay-policy=no-user-gesture-required"
       }
     ],
-    "security": { "csp": null }
+    "security": {
+      "csp": null
+    }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+    "targets": [
+      "nsis"
+    ],
+    "publisher": "HurricaneTV",
+    "copyright": "HurricaneTV",
+    "category": "Video",
+    "shortDescription": "Leitor IPTV",
+    "longDescription": "HurricaneTV — leitor IPTV para Xtream Codes, M3U e Stalker.",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "Portuguese",
+          "English"
+        ],
+        "displayLanguageSelector": false
+      }
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY1OTU4QUM0OUI3ODgxMkMKUldRc2dYaWJ4SXFWWmZPK0orcHRsUEUzdDZ2d3cvOXp3Ukw0ZG1LTldwTFpYbER2cjhNYkFoVUoK",
+      "endpoints": [
+        "https://github.com/bro0ks12/HurricaneTV/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

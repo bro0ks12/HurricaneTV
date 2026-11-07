@@ -5,6 +5,7 @@ import { useQuery } from "../lib/query";
 import { fmtDate } from "../lib/util";
 import { useProfile, useProvider } from "../store/app";
 
+import { t, tn } from "../lib/i18n";
 export function Account({ onSwitchProfile }: { onSwitchProfile: () => void }) {
   const profile = useProfile()!;
   const provider = useProvider()!;
@@ -15,12 +16,12 @@ export function Account({ onSwitchProfile }: { onSwitchProfile: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <ScreenHeader title="Conta" icon={<UserRound className="size-5" />} right={<Button variant="ghost" onClick={onSwitchProfile}><Users className="size-4" /> Mudar perfil</Button>} />
+      <ScreenHeader title={t("Conta")} icon={<UserRound className="size-5" />} right={<Button variant="ghost" onClick={onSwitchProfile}><Users className="size-4" /> {t("Mudar perfil")}</Button>} />
       <div className="min-h-0 flex-1 overflow-y-auto p-8">
         {acc.loading ? (
-          <Spinner label="A obter dados da conta…" />
+          <Spinner label={t("A obter dados da conta…")} />
         ) : acc.error ? (
-          <Empty title="Não foi possível obter a conta" hint={acc.error} action={<Button onClick={acc.refetch}>Tentar de novo</Button>} />
+          <Empty title={t("Não foi possível obter a conta")} hint={acc.error} action={<Button onClick={acc.refetch}>{t("Tentar de novo")}</Button>} />
         ) : (
           <div className="mx-auto max-w-4xl space-y-6">
             <div className="glass flex items-center gap-5 rounded-3xl p-6">
@@ -32,13 +33,13 @@ export function Account({ onSwitchProfile }: { onSwitchProfile: () => void }) {
                 <div className="truncate text-sm text-sky-100/55">{profile.username ? `${profile.username} · ` : ""}{a?.serverUrl}</div>
               </div>
               <Pill tone={active ? "green" : "rose"}>{a?.status ?? "—"}</Pill>
-              {a?.isTrial && <Pill tone="amber">Teste</Pill>}
+              {a?.isTrial && <Pill tone="amber">{t("Teste")}</Pill>}
             </div>
 
             <div className="grid grid-cols-3 gap-4">
-              <Stat icon={days != null && days < 7 ? <CalendarX /> : <CalendarCheck />} label="Expira" value={a?.expires ? fmtDate(a.expires) : "Ilimitado"} hint={days != null ? `${days} dias restantes` : undefined} tone={days != null && days < 7 ? "rose" : "sky"} />
-              <Stat icon={<MonitorSmartphone />} label="Ligações" value={a?.maxConnections != null ? `${a.activeConnections ?? 0} / ${a.maxConnections}` : "—"} hint="ativas / máximo" />
-              <Stat icon={<ShieldCheck />} label="Criada em" value={a?.createdAt ? fmtDate(a.createdAt) : "—"} hint={a?.timezone} />
+              <Stat icon={days != null && days < 7 ? <CalendarX /> : <CalendarCheck />} label={t("Expira")} value={a?.expires ? fmtDate(a.expires) : "Ilimitado"} hint={days != null ? tn(days, "1 dia restante", "{n} dias restantes") : undefined} tone={days != null && days < 7 ? "rose" : "sky"} />
+              <Stat icon={<MonitorSmartphone />} label={t("Ligações")} value={a?.maxConnections != null ? `${a.activeConnections ?? 0} / ${a.maxConnections}` : "—"} hint={t("ativas / máximo")} />
+              <Stat icon={<ShieldCheck />} label={t("Criada em")} value={a?.createdAt ? fmtDate(a.createdAt) : "—"} hint={a?.timezone} />
             </div>
 
             {a?.extra && (
@@ -53,7 +54,7 @@ export function Account({ onSwitchProfile }: { onSwitchProfile: () => void }) {
             )}
 
             <div className="flex items-center gap-2 text-xs text-sky-100/40">
-              <Link2 className="size-3.5" /> Tipo de fonte: {profile.kind.toUpperCase()}
+              <Link2 className="size-3.5" /> {t("Tipo de fonte:")} {profile.kind.toUpperCase()}
             </div>
           </div>
         )}

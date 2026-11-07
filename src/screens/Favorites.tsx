@@ -4,6 +4,7 @@ import { ChannelLogo, Empty, Poster, ScreenHeader } from "../components/ui";
 import { cn, fmtDate } from "../lib/util";
 import { useApp, useFavs, useHistory } from "../store/app";
 
+import { t } from "../lib/i18n";
 type Tab = "live" | "vod" | "series" | "recent";
 
 export function Favorites() {
@@ -15,15 +16,15 @@ export function Favorites() {
   const [tab, setTab] = useState<Tab>("live");
 
   const tabs: { id: Tab; label: string; icon: ReactNode; count: number }[] = [
-    { id: "live", label: "Canais", icon: <Tv className="size-4" />, count: favs.live.length },
-    { id: "vod", label: "Filmes", icon: <Film className="size-4" />, count: favs.vod.length },
-    { id: "series", label: "Séries", icon: <Clapperboard className="size-4" />, count: favs.series.length },
-    { id: "recent", label: "Vistos recentemente", icon: <History className="size-4" />, count: history.length },
+    { id: "live", label: t("Canais"), icon: <Tv className="size-4" />, count: favs.live.length },
+    { id: "vod", label: t("Filmes"), icon: <Film className="size-4" />, count: favs.vod.length },
+    { id: "series", label: t("Séries"), icon: <Clapperboard className="size-4" />, count: favs.series.length },
+    { id: "recent", label: t("Vistos recentemente"), icon: <History className="size-4" />, count: history.length },
   ];
 
   return (
     <div className="flex h-full flex-col">
-      <ScreenHeader title="Favoritos" icon={<Star className="size-5" />}>
+      <ScreenHeader title={t("Favoritos")} icon={<Star className="size-5" />}>
         <div className="flex rounded-xl border border-white/10 bg-white/5 p-1">
           {tabs.map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)} className={cn("focusable flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold transition", tab === t.id ? "bg-white/15 text-white" : "text-sky-100/55 hover:text-white")}>
@@ -40,7 +41,7 @@ export function Favorites() {
             <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
               {favs.live.map((ch, i) => (
                 <div key={ch.id} className="group glass flex items-center gap-3 rounded-2xl p-3">
-                  <button onClick={() => play({ title: ch.name, stream: ch.stream, type: "live", channels: favs.live, index: i, poster: ch.logo })} className="focusable flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left">
+                  <button onClick={() => play({ title: ch.name, stream: ch.stream, type: "live", channels: favs.live, index: i, poster: ch.logo, ua: ch.ua, referer: ch.referer })} className="focusable flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left">
                     <ChannelLogo src={ch.logo} name={ch.name} className="size-12" />
                     <span className="truncate font-semibold">{ch.name}</span>
                   </button>
@@ -51,7 +52,7 @@ export function Favorites() {
               ))}
             </div>
           ) : (
-            <Empty icon={<Star className="size-6" />} title="Sem canais favoritos" hint="Usa a estrela na lista de canais ou no leitor." action={<button className="focusable text-sm font-semibold text-sky-300" onClick={() => go("live")}>Ir para TV em Direto →</button>} />
+            <Empty icon={<Star className="size-6" />} title={t("Sem canais favoritos")} hint={t("Usa a estrela na lista de canais ou no leitor.")} action={<button className="focusable text-sm font-semibold text-sky-300" onClick={() => go("live")}>{t("Ir para TV em Direto →")}</button>} />
           ))}
 
         {(tab === "vod" || tab === "series") &&
@@ -60,7 +61,7 @@ export function Favorites() {
               {(tab === "vod" ? favs.vod : favs.series).map((it) => (
                 <div key={it.id} className="group relative">
                   <button
-                    onClick={() => (tab === "vod" ? play({ title: it.name, stream: (it as { stream: string }).stream, type: "vod", poster: it.poster }) : go("series"))}
+                    onClick={() => (tab === "vod" ? play({ title: it.name, stream: (it as { stream: string }).stream, type: "vod", poster: it.poster, ua: (it as { ua?: string }).ua, referer: (it as { referer?: string }).referer }) : go("series"))}
                     className="focusable block w-full rounded-xl text-left"
                   >
                     <Poster src={it.poster} name={it.name} className="aspect-[2/3] rounded-xl ring-1 ring-white/10" />
@@ -73,7 +74,7 @@ export function Favorites() {
               ))}
             </div>
           ) : (
-            <Empty icon={<Star className="size-6" />} title="Ainda sem favoritos" hint="Abre um título e carrega em «Favorito»." />
+            <Empty icon={<Star className="size-6" />} title={t("Ainda sem favoritos")} hint={t("Abre um título e carrega em «Favorito».")} />
           ))}
 
         {tab === "recent" &&
@@ -97,7 +98,7 @@ export function Favorites() {
               ))}
             </div>
           ) : (
-            <Empty icon={<History className="size-6" />} title="Sem histórico" />
+            <Empty icon={<History className="size-6" />} title={t("Sem histórico")} />
           ))}
       </div>
     </div>

@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Player } from "./components/Player";
+import { Sidebar } from "./components/Sidebar";
 import { Background } from "./components/ui";
 import { initProxy } from "./lib/http";
+import { UpdateToast } from "./components/UpdateToast";
+import { PinHost } from "./lib/parental";
 import { installSpatialNav } from "./lib/spatial";
 import { Account } from "./screens/Account";
 import { CatchUp } from "./screens/CatchUp";
@@ -21,6 +24,7 @@ export default function App() {
   const screen = useScreen();
   const back = useApp((s) => s.back);
   const playing = useApp((s) => !!s.playing);
+  const language = useApp((s) => s.settings.language);
   const [ready, setReady] = useState(false);
   const [switching, setSwitching] = useState(false);
 
@@ -35,11 +39,13 @@ export default function App() {
   const switchProfile = () => setSwitching(true);
 
   return (
-    <>
+    <Fragment key={language}>
       <Background dim={screen !== "home"} />
       {profile && (
-        <main key={`${profile.id}:${screen}`} className="h-full animate-fade-up" style={{ visibility: playing ? "hidden" : undefined }}>
-          {screen === "home" && <Home onSwitchProfile={switchProfile} />}
+        <div className="flex h-full" style={{ visibility: playing ? "hidden" : undefined }}>
+        <Sidebar onProfiles={switchProfile} />
+        <main key={`${profile.id}:${screen}`} className="h-full min-w-0 flex-1 animate-fade-up">
+          {screen === "home" && <Home />}
           {screen === "live" && <Live />}
           {screen === "radio" && <Live radio />}
           {screen === "epg" && <Epg />}
@@ -52,9 +58,12 @@ export default function App() {
           {screen === "settings" && <Settings />}
           {screen === "search" && <Search />}
         </main>
+        </div>
       )}
       {showProfiles && <Profiles canClose={!!profile} onDone={() => setSwitching(false)} />}
       <Player />
-    </>
+      <PinHost />
+      <UpdateToast />
+    </Fragment>
   );
 }

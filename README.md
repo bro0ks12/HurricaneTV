@@ -1,4 +1,4 @@
-# NexoTV
+# HurricaneTV
 
 Leitor IPTV desktop (Tauri 2 + React 19 + Tailwind 4) com interface estilo TV.
 
