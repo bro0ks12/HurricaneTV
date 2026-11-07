@@ -35,7 +35,7 @@ export const defaultSettings: Settings = {
   tmdbKey: "",
   parentalPinHash: "",
   parentalLockAdult: true,
-  language: "pt",
+  language: "en",
 };
 
 let current: Settings = defaultSettings;

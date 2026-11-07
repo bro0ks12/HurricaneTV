@@ -23,7 +23,7 @@ export const LANGS: { id: Lang; label: string; flag: string }[] = [
 
 export const lang = (): Lang => {
   const l = getSettings().language;
-  return LANGS.some((x) => x.id === l) ? l : "pt";
+  return LANGS.some((x) => x.id === l) ? l : "en";
 };
 /** BCP-47 locale for dates / Intl */
 const LOCALES: Record<Lang, string> = { pt: "pt-PT", en: "en-GB", es: "es-ES", fr: "fr-FR", de: "de-DE", it: "it-IT" };
