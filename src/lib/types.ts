@@ -46,6 +46,8 @@ export interface VodItem {
   categoryId?: string;
   rating?: number;
   year?: string;
+  /** when the provider added it (ms epoch) — drives the "Recentes" sort */
+  added?: number;
   ext?: string;
   stream: string;
   ua?: string;
@@ -70,6 +72,7 @@ export interface SeriesItem {
   categoryId?: string;
   rating?: number;
   year?: string;
+  added?: number;
   plot?: string;
 }
 

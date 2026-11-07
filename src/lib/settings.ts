@@ -19,7 +19,7 @@ export interface Settings {
   /** adult categories always need the PIN (instead of only being hidden) */
   parentalLockAdult: boolean;
   /** interface language */
-  language: "pt" | "en";
+  language: "pt" | "en" | "es" | "fr" | "de" | "it";
 }
 
 export const defaultSettings: Settings = {

@@ -244,11 +244,12 @@ async function viaCinemeta(kind: MetaKind, title: string, year?: string): Promis
 /* ---------------- TMDB (optional) ---------------- */
 
 const TMDB = "https://api.themoviedb.org/3";
+const TMDB_LANG = { pt: "pt-PT", en: "en-US", es: "es-ES", fr: "fr-FR", de: "de-DE", it: "it-IT" } as const;
 const IMG = "https://image.tmdb.org/t/p/";
 
 function tmdbUrl(path: string, params: Record<string, string> = {}) {
   const key = getSettings().tmdbKey.trim();
-  const qs = new URLSearchParams({ language: lang() === "en" ? "en-US" : "pt-PT", ...params });
+  const qs = new URLSearchParams({ language: TMDB_LANG[lang()], ...params });
   // v4 read tokens are long JWTs (sent as header); v3 keys go in the query
   if (key.length <= 40) qs.set("api_key", key);
   return `${TMDB}${path}?${qs}`;

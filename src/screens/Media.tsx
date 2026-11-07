@@ -1,4 +1,4 @@
-import { CalendarDays, Clapperboard, Clock3, Film, LayoutGrid, Play, Star, Users, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarDays, Clapperboard, Clock3, Film, LayoutGrid, Play, Star, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button, CastRow, CategoryList, Empty, ImdbBadge, Pill, Poster, Rating, ScreenHeader, SearchBox, Spinner, useIncremental } from "../components/ui";
 import { cleanTitle, seasonMeta, useInView, useMeta, type Meta as MetaT } from "../lib/meta";
@@ -20,6 +20,18 @@ const SORTS = [
   { id: "year", get label() { return t("Ano"); } },
 ] as const;
 
+const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true, ignorePunctuation: true });
+/** alphabetical on the cleaned title, so "PT | The Matrix 1080p" sorts under T, not P */
+const cleaned = new Map<string, ReturnType<typeof cleanTitle>>();
+const clean = (name: string) => {
+  let c = cleaned.get(name);
+  if (!c) cleaned.set(name, (c = cleanTitle(name)));
+  return c;
+};
+const byTitle = (a: Item, b: Item) => collator.compare(clean(a.name).title, clean(b.name).title);
+/** 4-digit year from the provider field ("2021", "2021-05-03") or the title; 0 when unknown */
+const yearOf = (x: Item) => Number(/(?:19|20)d{2}/.exec(x.year ?? "")?.[0] ?? clean(x.name).year ?? 0);
+
 export function MediaScreen({ kind }: { kind: Kind }) {
   const profile = useProfile()!;
   const provider = useProvider()!;
@@ -28,6 +40,15 @@ export function MediaScreen({ kind }: { kind: Kind }) {
   const [cat, setCat] = useState("__all");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<(typeof SORTS)[number]["id"]>("default");
+  /** true = opposite of the sort's natural direction (A–Z natural is ascending, the rest descending) */
+  const [rev, setRev] = useState(false);
+  const pickSort = (id: (typeof SORTS)[number]["id"]) => {
+    if (id === sort) setRev((r) => !r);
+    else {
+      setSort(id);
+      setRev(false);
+    }
+  };
   const [open, setOpen] = useState<Item | null>(null);
 
   const cats = useQuery(`${kind}-cats:${profile.id}`, () => (kind === "vod" ? provider.vodCategories() : provider.seriesCategories()));
@@ -51,11 +72,21 @@ export function MediaScreen({ kind }: { kind: Kind }) {
       const s = q.toLowerCase();
       l = l.filter((x) => x.name.toLowerCase().includes(s));
     }
-    if (sort === "az") l = [...l].sort((a, b) => a.name.localeCompare(b.name));
-    if (sort === "rating") l = [...l].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
-    if (sort === "year") l = [...l].sort((a, b) => Number(b.year ?? 0) - Number(a.year ?? 0));
+    const d = rev ? -1 : 1;
+    if (sort === "default") {
+      // newest first when the provider tells us; otherwise keep its own order (Stalker already sends newest first)
+      if (l.some((x) => x.added)) l = [...l].sort((x, y) => d * ((y.added ?? 0) - (x.added ?? 0)));
+      else if (rev) l = [...l].reverse();
+    } else if (sort === "az") {
+      l = [...l].sort((x, y) => d * byTitle(x, y));
+    } else if (sort === "rating") {
+      // unrated titles stay last in both directions, ties alphabetical
+      l = [...l].sort((x, y) => (!x.rating ? 1 : 0) - (!y.rating ? 1 : 0) || d * ((y.rating ?? 0) - (x.rating ?? 0)) || byTitle(x, y));
+    } else if (sort === "year") {
+      l = [...l].sort((x, y) => (!yearOf(x) ? 1 : 0) - (!yearOf(y) ? 1 : 0) || d * (yearOf(y) - yearOf(x)) || byTitle(x, y));
+    }
     return l;
-  }, [cat, kind, favs, items.data, q, sort, settings.hideAdult, cats.data, par.hidden]);
+  }, [cat, kind, favs, items.data, q, sort, rev, settings.hideAdult, cats.data, par.hidden]);
 
   const { visible, onScroll } = useIncremental(list, 90);
   const loading = cat !== "__fav" && items.loading;
@@ -66,8 +97,9 @@ export function MediaScreen({ kind }: { kind: Kind }) {
         <SearchBox value={q} onChange={setQ} placeholder={kind === "vod" ? t("Pesquisar filmes…") : t("Pesquisar séries…")} className="w-80" />
         <div className="flex rounded-xl border border-white/10 bg-white/5 p-1">
           {SORTS.map((s) => (
-            <button key={s.id} onClick={() => setSort(s.id)} className={cn("focusable rounded-lg px-3 py-1.5 text-xs font-bold transition", sort === s.id ? "bg-white/15 text-white" : "text-sky-100/55 hover:text-white")}>
+            <button key={s.id} onClick={() => pickSort(s.id)} className={cn("focusable inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition", sort === s.id ? "bg-white/15 text-white" : "text-sky-100/55 hover:text-white")}>
               {s.label}
+              {sort === s.id && ((s.id === "az") !== rev ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />)}
             </button>
           ))}
         </div>

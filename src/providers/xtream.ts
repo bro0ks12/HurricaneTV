@@ -41,6 +41,8 @@ export function createXtream(p: Profile): Provider {
       hasArchive: e.has_archive == 1,
       startRaw: e.start,
     }));
+  /** unix seconds (string or number) -> ms, undefined when missing */
+  const ts = (v: Any) => (Number(v) > 0 ? Number(v) * 1000 : undefined);
   const rating = (s: Any) => {
     const r5 = num(s.rating_5based);
     return r5 ? r5 * 2 : num(s.rating);
@@ -92,6 +94,7 @@ export function createXtream(p: Profile): Provider {
           categoryId: String(s.category_id),
           rating: rating(s),
           year: s.year || undefined,
+          added: ts(s.added),
           ext: s.container_extension,
           stream: `${base}/movie/${u}/${pw}/${s.stream_id}.${s.container_extension || "mp4"}`,
         }),
@@ -123,6 +126,7 @@ export function createXtream(p: Profile): Provider {
           rating: rating(s),
           year: String(s.releaseDate || s.release_date || "").slice(0, 4) || undefined,
           plot: s.plot,
+          added: ts(s.last_modified || s.added),
         }),
       );
     },
