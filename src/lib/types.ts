@@ -10,6 +10,8 @@ export interface Profile {
   password?: string;
   // m3u
   url?: string;
+  /** name of an imported playlist file (its text is kept in IndexedDB, see lib/files.ts) */
+  file?: string;
   epgUrl?: string;
   // stalker
   portal?: string;

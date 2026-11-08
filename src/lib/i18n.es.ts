@@ -340,4 +340,11 @@ export const ES: Record<string, string> = {
   "Falhou a atualização. Tenta outra vez.": "Falló la actualización. Inténtalo de nuevo.",
   "Atualizar e reiniciar": "Actualizar y reiniciar",
   "A descarregar…": "Descargando…",
+  "URL ou ficheiro .m3u / .m3u8": "URL o archivo .m3u / .m3u8",
+  "Ficheiro da playlist": "Archivo de la lista",
+  "Escolhe um .m3u / .m3u8 do teu computador (em vez do URL acima).": "Elige un .m3u / .m3u8 de tu ordenador (en lugar de la URL de arriba).",
+  "Indica um URL http(s) ou escolhe um ficheiro de playlist.": "Introduce una URL http(s) o elige un archivo de lista.",
+  "Este ficheiro não parece uma playlist M3U.": "Este archivo no parece una lista M3U.",
+  "Ficheiro: {0}": "Archivo: {0}",
+  "O ficheiro da playlist já não está guardado — importa-o outra vez.": "El archivo de la lista ya no está guardado: impórtalo de nuevo.",
 };

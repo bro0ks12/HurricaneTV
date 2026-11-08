@@ -1,6 +1,7 @@
-import { Check, Link2, Loader2, MonitorPlay, Plus, Router, Server, Sparkles, Trash2 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { Check, Link2, Loader2, MonitorPlay, Plus, Router, Server, Sparkles, Trash2, Upload } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
 import { Button, Pill } from "../components/ui";
+import { deletePlaylist, savePlaylist } from "../lib/files";
 import type { Profile, ProviderKind } from "../lib/types";
 import { cn, uid } from "../lib/util";
 import { createProvider } from "../providers";
@@ -10,7 +11,7 @@ import { useApp } from "../store/app";
 import { LANGS, t } from "../lib/i18n";
 const KINDS: { id: ProviderKind; label: string; icon: ReactNode; hint: string }[] = [
   { id: "xtream", get label() { return t("Xtream Codes"); }, icon: <Server className="size-5" />, get hint() { return t("Servidor, utilizador e password"); } },
-  { id: "m3u", get label() { return t("Playlist M3U"); }, icon: <Link2 className="size-5" />, get hint() { return t("URL de uma lista .m3u / .m3u8"); } },
+  { id: "m3u", get label() { return t("Playlist M3U"); }, icon: <Link2 className="size-5" />, get hint() { return t("URL ou ficheiro .m3u / .m3u8"); } },
   { id: "stalker", get label() { return t("Stalker Portal"); }, icon: <Router className="size-5" />, get hint() { return t("URL do portal e endereço MAC"); } },
   { id: "demo", get label() { return t("Demonstração"); }, icon: <Sparkles className="size-5" />, get hint() { return t("Streams de teste públicos"); } },
 ];
@@ -63,7 +64,7 @@ export function Profiles({ onDone, canClose }: { onDone: () => void; canClose: b
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-bold">{p.name}</div>
-                      <div className="truncate text-xs text-sky-100/55">{p.server || p.url || p.portal || t("Streams de teste")}</div>
+                      <div className="truncate text-xs text-sky-100/55">{p.server || p.url || (p.file && t("Ficheiro: {0}", { 0: p.file })) || p.portal || t("Streams de teste")}</div>
                     </div>
                     <Pill tone={p.kind === "demo" ? "amber" : "sky"}>{kindLabel(p.kind)}</Pill>
                     {p.id === activeId && <Check className="size-5 text-sky-300" />}
@@ -103,6 +104,15 @@ function AddProfile({ onAdded, onCancel }: { onAdded: () => void; onCancel?: () 
   const [f, setF] = useState({ name: "", server: "", username: "", password: "", url: "", epgUrl: "", portal: "", mac: "00:1A:79:" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [file, setFile] = useState<{ name: string; text: string } | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const pickFile = async (f: File) => {
+    setError(null);
+    const text = await f.text();
+    if (!/#EXTM3U|#EXTINF/i.test(text)) return setError(t("Este ficheiro não parece uma playlist M3U."));
+    setFile({ name: f.name, text });
+    setF((x) => ({ ...x, name: x.name || f.name.replace(/\.[^.]+$/, "") }));
+  };
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
 
   const submit = async (e?: React.FormEvent) => {
@@ -118,8 +128,12 @@ function AddProfile({ onAdded, onCancel }: { onAdded: () => void; onCancel?: () 
       if (!f.server || !f.username || !f.password) return setError(t("Preenche servidor, utilizador e password."));
       Object.assign(p, { server: f.server.trim(), username: f.username.trim(), password: f.password });
     } else if (kind === "m3u") {
-      if (!/^https?:\/\//i.test(f.url.trim())) return setError(t("Indica um URL http(s) válido para a playlist."));
-      Object.assign(p, { url: f.url.trim(), epgUrl: f.epgUrl.trim() || undefined });
+      if (file) Object.assign(p, { file: file.name, epgUrl: f.epgUrl.trim() || undefined });
+      else {
+        if (!f.url.trim()) return setError(t("Indica um URL http(s) ou escolhe um ficheiro de playlist."));
+        if (!/^https?:\/\//i.test(f.url.trim())) return setError(t("Indica um URL http(s) válido para a playlist."));
+        Object.assign(p, { url: f.url.trim(), epgUrl: f.epgUrl.trim() || undefined });
+      }
     } else if (kind === "stalker") {
       const mac = normalizeMac(f.mac);
       if (!f.portal || !/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(mac)) return setError(t("Indica o URL do portal e um MAC válido (00:1A:79:XX:XX:XX)."));
@@ -127,12 +141,14 @@ function AddProfile({ onAdded, onCancel }: { onAdded: () => void; onCancel?: () 
     }
     setBusy(true);
     try {
+      if (p.file && file) await savePlaylist(p.id, file.text);
       const prov = createProvider(p);
       if (kind === "m3u") await prov.liveCategories();
       else await prov.account();
       addProfile(p);
       onAdded();
     } catch (err) {
+      if (p.file) void deletePlaylist(p.id);
       setError(t("Não foi possível ligar: {0}", { 0: err instanceof Error ? err.message : String(err) }));
     } finally {
       setBusy(false);
@@ -184,7 +200,30 @@ function AddProfile({ onAdded, onCancel }: { onAdded: () => void; onCancel?: () 
         {kind === "m3u" && (
           <>
             <Field label={t("URL da playlist")}>
-              <input className={inputCls} value={f.url} onChange={set("url")} placeholder="https://…/playlist.m3u" />
+              <input className={inputCls} value={f.url} onChange={set("url")} placeholder="https://…/playlist.m3u" disabled={!!file} />
+            </Field>
+            <Field label={t("Ficheiro da playlist")} hint={t("Escolhe um .m3u / .m3u8 do teu computador (em vez do URL acima).")}>
+              <input
+                ref={fileInput}
+                type="file"
+                accept=".m3u,.m3u8,.txt"
+                className="hidden"
+                onChange={(e) => {
+                  const picked = e.target.files?.[0];
+                  if (picked) void pickFile(picked);
+                  e.target.value = "";
+                }}
+              />
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="ghost" onClick={() => fileInput.current?.click()}>
+                  <Upload className="size-4" /> {file ? file.name : t("Escolher ficheiro…")}
+                </Button>
+                {file && (
+                  <button type="button" onClick={() => setFile(null)} title={t("Remover ficheiro")} className="focusable grid size-9 place-items-center rounded-lg bg-white/8 hover:bg-rose-500/30">
+                    <Trash2 className="size-4" />
+                  </button>
+                )}
+              </div>
             </Field>
             <Field label={t("URL do EPG (opcional)")} hint={t("XMLTV (.xml ou .xml.gz). Se vazio, usa o url-tvg da playlist.")}>
               <input className={inputCls} value={f.epgUrl} onChange={set("epgUrl")} placeholder="https://…/epg.xml.gz" />

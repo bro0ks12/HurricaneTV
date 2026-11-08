@@ -1,4 +1,6 @@
+import { loadPlaylist } from "../lib/files";
 import { httpText } from "../lib/http";
+import { t } from "../lib/i18n";
 import type { Category, Channel, Episode, Profile, Program, Provider, SeriesInfo, SeriesItem, VodItem } from "../lib/types";
 
 interface Entry {
@@ -100,6 +102,27 @@ function catsOf(items: { categoryId?: string }[]): Category[] {
   return [...counts].map(([name, count]) => ({ id: name, name, count }));
 }
 
+const VOD_GROUP = /^\s*(filmes?|movies?|films?|vod|cinema|pel[ií]culas?)\b/i;
+const SERIES_GROUP = /^\s*(s[ée]ries?|tv ?shows?|shows|novelas?)\b/i;
+
+/**
+ * Live vs movie vs series. Order: explicit tvg-type, then the group-title
+ * ("Filmes | …", "Séries | …"), then the URL (Xtream /movie/ /series/ paths,
+ * file extensions). A movie served as HLS (.m3u8) is only recognised by the
+ * first two, since its URL looks exactly like a live channel's.
+ */
+function kindOf(e: Entry, group: string): "live" | "vod" | "series" {
+  const type = (e.attrs["tvg-type"] || e.attrs["type"] || "").toLowerCase();
+  if (/^(movies?|vod|films?)$/.test(type)) return "vod";
+  if (/^(series|shows?|tv)$/.test(type)) return "series";
+  if (/^(live|channel|tv-live)$/.test(type)) return "live";
+  if (SERIES_GROUP.test(group)) return "series";
+  if (VOD_GROUP.test(group)) return EP.test(e.name) ? "series" : "vod";
+  if (/\/series\//i.test(e.url) || (VOD_EXT.test(e.url) && EP.test(e.name))) return "series";
+  if (/\/movie\//i.test(e.url) || VOD_EXT.test(e.url)) return "vod";
+  return "live";
+}
+
 function build(text: string): Parsed {
   const { header, entries } = parseM3u(text);
   const live: Channel[] = [];
@@ -109,11 +132,14 @@ function build(text: string): Parsed {
   entries.forEach((e, idx) => {
     const group = e.attrs["group-title"] || "Sem categoria";
     const logo = e.attrs["tvg-logo"] || undefined;
-    const isSeries = /\/series\//i.test(e.url) || (VOD_EXT.test(e.url) && EP.test(e.name));
-    const isVod = !isSeries && (/\/movie\//i.test(e.url) || VOD_EXT.test(e.url));
+    const kind = kindOf(e, group);
+    const isSeries = kind === "series";
+    const isVod = kind === "vod";
     if (isSeries) {
       const m = e.name.match(EP);
-      const title = (m?.[1] || e.name).replace(/[\s._-]+$/, "").trim() || e.name;
+      // no SxxExx in the name: fall back to the series name in "Séries | Nome"
+      const fromGroup = group.includes("|") ? group.split("|").pop()!.trim() : "";
+      const title = (m?.[1] || fromGroup || e.name).replace(/[\s._-]+$/, "").trim() || e.name;
       const key = `${group}::${title.toLowerCase()}`;
       let s = seriesMap.get(key);
       if (!s) {
@@ -218,7 +244,13 @@ async function loadXmltv(url: string, wanted: Set<string>): Promise<Map<string, 
 export function createM3u(p: Profile): Provider {
   let parsed: Promise<Parsed> | null = null;
   let epg: Promise<Map<string, Program[]>> | null = null;
-  const data = () => (parsed ??= httpText(p.url!).then(build));
+  const source = async () => {
+    if (!p.file) return httpText(p.url!);
+    const text = await loadPlaylist(p.id);
+    if (!text) throw new Error(t("O ficheiro da playlist já não está guardado — importa-o outra vez."));
+    return text;
+  };
+  const data = () => (parsed ??= source().then(build));
   const guide = async () => {
     const d = await data();
     const url = p.epgUrl || d.epgUrl?.split(",")[0];
@@ -235,7 +267,7 @@ export function createM3u(p: Profile): Provider {
       return {
         status: "Active",
         expires: null,
-        serverUrl: p.url,
+        serverUrl: p.file ? t("Ficheiro: {0}", { 0: p.file }) : p.url,
         extra: {
           Canais: String(d.live.length),
           Filmes: String(d.vod.length),

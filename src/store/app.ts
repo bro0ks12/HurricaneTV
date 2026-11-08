@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { defaultSettings, setSettingsRef, type Settings } from "../lib/settings";
 import type { Channel, Profile, Provider, SeriesItem, VodItem } from "../lib/types";
+import { deletePlaylist } from "../lib/files";
 import { createProvider } from "../providers";
 
 export type Screen =
@@ -111,6 +112,7 @@ export const useApp = create<State>()(
       removeProfile: (id) =>
         set((s) => {
           const profiles = s.profiles.filter((x) => x.id !== id);
+          void deletePlaylist(id);
           return { profiles, activeId: s.activeId === id ? (profiles[0]?.id ?? null) : s.activeId };
         }),
       setActive: (id) => set({ activeId: id, stack: ["home"] }),

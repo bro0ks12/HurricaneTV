@@ -50,8 +50,10 @@ export function Home() {
   const reload = () => {
     clearCache();
     resetProviders();
-    acc.refetch();
+    // every query on this screen, not just the account: otherwise the rows keep the old lists
+    for (const q of [acc, vod, series, vodCats, seriesCats]) q.refetch();
   };
+  const refreshing = [acc, vod, series, vodCats, seriesCats].some((q) => q.loading);
 
   return (
     <div className="h-full overflow-y-auto">
@@ -69,8 +71,8 @@ export function Home() {
         <button onClick={() => nav("search")} className="focusable flex h-11 w-80 items-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.04] px-4 text-sm text-sky-100/45 transition hover:border-sky-300/30 hover:bg-white/[0.07]">
           <Search className="size-4" /> {t("Procurar canais, filmes, séries…")}
         </button>
-        <button onClick={reload} title={t("Recarregar listas")} className="focusable grid size-11 place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.04] text-sky-100/70 transition hover:text-white">
-          <RefreshCw className="size-[18px]" />
+        <button onClick={reload} disabled={refreshing} title={t("Recarregar listas")} className="focusable grid size-11 place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.04] text-sky-100/70 transition hover:text-white">
+          <RefreshCw className={cn("size-[18px]", refreshing && "animate-spin")} />
         </button>
         <Clock />
       </div>
