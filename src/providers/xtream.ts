@@ -1,3 +1,4 @@
+import { t } from "../lib/i18n";
 import { httpJson } from "../lib/http";
 import { getSettings } from "../lib/settings";
 import type { AccountInfo, Category, Channel, Episode, Profile, Program, Provider, SeriesInfo, SeriesItem, VodInfo, VodItem } from "../lib/types";
@@ -53,13 +54,14 @@ export function createXtream(p: Profile): Provider {
     async account(): Promise<AccountInfo> {
       const r = await api();
       const ui = r?.user_info;
-      if (!ui || ui.auth === 0) throw new Error("Credenciais inválidas");
+      if (!ui || ui.auth === 0) throw new Error(t("Credenciais inválidas"));
       return {
         status: ui.status,
-        expires: ui.exp_date ? Number(ui.exp_date) * 1000 : null,
+        // some panels send "0" (a truthy string) for unlimited accounts
+        expires: Number(ui.exp_date) > 0 ? Number(ui.exp_date) * 1000 : null,
         maxConnections: num(ui.max_connections),
         activeConnections: num(ui.active_cons),
-        createdAt: ui.created_at ? Number(ui.created_at) * 1000 : undefined,
+        createdAt: Number(ui.created_at) > 0 ? Number(ui.created_at) * 1000 : undefined,
         isTrial: ui.is_trial == 1,
         serverUrl: base,
         timezone: r?.server_info?.timezone,

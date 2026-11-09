@@ -21,14 +21,27 @@ jobs:
         with:
           workspaces: src-tauri
       - run: npm ci
+      - name: Release notes
+        id: notes
+        shell: bash
+        run: |
+          f="release-notes/${{ github.ref_name }}.md"
+          {
+            echo 'body<<NOTES_EOF'
+            if [ -f "$f" ]; then cat "$f"; else echo 'Descarrega o instalador `HurricaneTV_*_x64-setup.exe`.'; fi
+            echo
+            echo 'Quem já tem a app recebe aviso de atualização automaticamente.'
+            echo 'NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: HurricaneTV ${{ github.ref_name }}
-          releaseBody: Descarrega o instalador `HurricaneTV_*_x64-setup.exe`. Quem já tem a app recebe aviso de atualização automaticamente.
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
           prerelease: false

@@ -56,6 +56,8 @@ export function Player() {
   const [controls, setControls] = useState(true);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(1);
+  // "on" = video is playing but the webview decoded no audio at all (usually an AC3/E-AC3/DTS/TrueHD track)
+  const [noAudio, setNoAudio] = useState<"off" | "on" | "hidden">("off");
   const [time, setTime] = useState({ t: 0, d: 0 });
   const [full, setFull] = useState(!!document.fullscreenElement);
   const [nonce, setNonce] = useState(0);
@@ -253,6 +255,25 @@ export function Player() {
     if (video.current) video.current.volume = volume;
   }, [volume, url]);
 
+  // detect silent playback: Chromium counts the audio bytes it decoded; 0 while the picture moves = no usable audio track
+  useEffect(() => {
+    setNoAudio("off");
+    if (!url) return;
+    let strikes = 0;
+    const id = setInterval(() => {
+      const v = video.current as (HTMLVideoElement & { webkitAudioDecodedByteCount?: number }) | null;
+      if (!v || typeof v.webkitAudioDecodedByteCount !== "number") return;
+      if (v.paused || v.seeking || v.readyState < 3 || v.currentTime < 3) return;
+      if (v.webkitAudioDecodedByteCount > 0) {
+        strikes = 0;
+        setNoAudio((s) => (s === "on" ? "off" : s));
+      } else if (++strikes >= 2) {
+        setNoAudio((s) => (s === "off" ? "on" : s));
+      }
+    }, 1500);
+    return () => clearInterval(id);
+  }, [url, nonce]);
+
   // keyboard
   useEffect(() => {
     if (!req) return;
@@ -411,6 +432,20 @@ export function Player() {
       {!err && status.state === "loading" && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
           <Loader2 className="size-14 animate-spin text-sky-300 drop-shadow-lg" />
+        </div>
+      )}
+      {noAudio === "on" && !err && (
+        <div className="absolute top-20 left-1/2 z-20 flex max-w-xl -translate-x-1/2 items-center gap-3 rounded-2xl border border-amber-300/30 bg-black/80 px-4 py-3 text-sm backdrop-blur">
+          <VolumeX className="size-5 shrink-0 text-amber-300" />
+          <span className="text-sky-50/90">{t("Sem áudio: este ficheiro pode usar um formato de áudio (AC3, DTS…) que a app não consegue reproduzir.")}</span>
+          {url && (
+            <button className="focusable inline-flex h-9 shrink-0 items-center gap-2 rounded-xl bg-sky-500 px-3 text-xs font-semibold" onClick={external}>
+              <ExternalLink className="size-4" /> {t("Abrir no VLC / mpv")}
+            </button>
+          )}
+          <button className="focusable shrink-0 rounded-lg px-2 py-1 text-xs text-sky-100/60 hover:text-white" onClick={() => setNoAudio("hidden")}>
+            {t("Fechar")}
+          </button>
         </div>
       )}
       {err && (

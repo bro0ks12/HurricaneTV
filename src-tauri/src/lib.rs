@@ -26,6 +26,47 @@ struct HttpResponse {
     headers: HashMap<String, String>,
 }
 
+/// TMDB key baked in at build time (see build.rs). Empty = TMDB unavailable.
+const TMDB_KEY: Option<&str> = option_env!("HTV_TMDB_KEY");
+
+#[tauri::command]
+fn tmdb_enabled() -> bool {
+    TMDB_KEY.is_some_and(|k| !k.trim().is_empty())
+}
+
+/// GET on the TMDB v3 API with the embedded key added here, so the key never reaches the webview.
+#[tauri::command]
+async fn tmdb_get(path: String, params: HashMap<String, String>) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let key = TMDB_KEY.map(str::trim).filter(|k| !k.is_empty()).ok_or("TMDB indisponível")?;
+        if !path.starts_with('/') || path.contains("..") || path.contains('?') {
+            return Err("caminho TMDB inválido".to_string());
+        }
+        let mut url = url::Url::parse(&format!("https://api.themoviedb.org/3{path}")).map_err(|e| e.to_string())?;
+        {
+            let mut q = url.query_pairs_mut();
+            for (k, v) in &params {
+                q.append_pair(k, v);
+            }
+            // v3 keys go in the query, v4 read tokens (long JWTs) as a bearer header
+            if key.len() <= 40 {
+                q.append_pair("api_key", key);
+            }
+        }
+        let mut req = proxy::client().get(url).header("Accept", "application/json").header("User-Agent", proxy::DEFAULT_UA);
+        if key.len() > 40 {
+            req = req.bearer_auth(key);
+        }
+        let resp = req.send().map_err(|e| e.to_string())?;
+        if !resp.status().is_success() {
+            return Err(format!("HTTP {}", resp.status().as_u16()));
+        }
+        resp.text().map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Generic HTTP GET used by the providers (Xtream / M3U / Stalker / XMLTV).
 /// Runs in Rust so it is not subject to the webview's CORS rules.
 #[tauri::command]
@@ -216,7 +257,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .invoke_handler(tauri::generate_handler![http_get, proxy_port, probe_stream, open_external, mkv_tracks, mkv_cues, save_to_downloads, reveal_path])
+        .invoke_handler(tauri::generate_handler![http_get, tmdb_get, tmdb_enabled, proxy_port, probe_stream, open_external, mkv_tracks, mkv_cues, save_to_downloads, reveal_path])
         .run(tauri::generate_context!())
         .expect("error while running HurricaneTV");
 }

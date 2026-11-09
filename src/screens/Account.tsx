@@ -32,12 +32,12 @@ export function Account({ onSwitchProfile }: { onSwitchProfile: () => void }) {
                 <div className="text-2xl font-extrabold">{profile.name}</div>
                 <div className="truncate text-sm text-sky-100/55">{profile.username ? `${profile.username} · ` : ""}{a?.serverUrl}</div>
               </div>
-              <Pill tone={active ? "green" : "rose"}>{a?.status ?? "—"}</Pill>
+              <Pill tone={active ? "green" : "rose"}>{a?.status ? statusLabel(a.status) : "—"}</Pill>
               {a?.isTrial && <Pill tone="amber">{t("Teste")}</Pill>}
             </div>
 
             <div className="grid grid-cols-3 gap-4">
-              <Stat icon={days != null && days < 7 ? <CalendarX /> : <CalendarCheck />} label={t("Expira")} value={a?.expires ? fmtDate(a.expires) : "Ilimitado"} hint={days != null ? tn(days, "1 dia restante", "{n} dias restantes") : undefined} tone={days != null && days < 7 ? "rose" : "sky"} />
+              <Stat icon={days != null && days < 7 ? <CalendarX /> : <CalendarCheck />} label={t("Expira")} value={a?.expires ? fmtDate(a.expires) : t("Ilimitado")} hint={days != null ? tn(days, "1 dia restante", "{n} dias restantes") : undefined} tone={days != null && days < 7 ? "rose" : "sky"} />
               <Stat icon={<MonitorSmartphone />} label={t("Ligações")} value={a?.maxConnections != null ? `${a.activeConnections ?? 0} / ${a.maxConnections}` : "—"} hint={t("ativas / máximo")} />
               <Stat icon={<ShieldCheck />} label={t("Criada em")} value={a?.createdAt ? fmtDate(a.createdAt) : "—"} hint={a?.timezone} />
             </div>
@@ -46,7 +46,7 @@ export function Account({ onSwitchProfile }: { onSwitchProfile: () => void }) {
               <div className="glass overflow-hidden rounded-2xl">
                 {Object.entries(a.extra).map(([k, v]) => (
                   <div key={k} className="flex items-center gap-4 border-b border-white/5 px-5 py-3.5 last:border-0">
-                    <span className="w-32 text-sm text-sky-100/50">{k}</span>
+                    <span className="w-32 text-sm text-sky-100/50">{t(k)}</span>
                     <span className="min-w-0 flex-1 truncate text-sm font-semibold">{v}</span>
                   </div>
                 ))}
@@ -72,4 +72,10 @@ function Stat({ icon, label, value, hint, tone = "sky" }: { icon: ReactNode; lab
       {hint && <div className="mt-0.5 text-xs text-sky-100/45">{hint}</div>}
     </div>
   );
+}
+
+/** Server status text (Xtream sends English words) in the UI language. */
+function statusLabel(s: string) {
+  const k = s.trim().toLowerCase();
+  return k === "active" ? t("Ativa") : k === "expired" ? t("Expirada") : k === "banned" ? t("Banida") : k === "disabled" ? t("Desativada") : s;
 }

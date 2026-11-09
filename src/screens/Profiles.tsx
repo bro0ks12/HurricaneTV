@@ -184,7 +184,7 @@ function AddProfile({ onAdded, onCancel }: { onAdded: () => void; onCancel?: () 
 
         {kind === "xtream" && (
           <>
-            <Field label={t("Servidor")} hint="Ex.: http://exemplo.com:8080">
+            <Field label={t("Servidor")} hint={t("Ex.: http://exemplo.com:8080")}>
               <input className={inputCls} value={f.server} onChange={set("server")} placeholder="http://servidor:porta" />
             </Field>
             <div className="grid grid-cols-2 gap-4">
@@ -232,7 +232,7 @@ function AddProfile({ onAdded, onCancel }: { onAdded: () => void; onCancel?: () 
         )}
         {kind === "stalker" && (
           <>
-            <Field label={t("URL do portal")} hint="Ex.: http://portal.exemplo.com/c/">
+            <Field label={t("URL do portal")} hint={t("Ex.: http://portal.exemplo.com/c/")}>
               <input className={inputCls} value={f.portal} onChange={set("portal")} placeholder="http://portal:porta/c/" />
             </Field>
             <Field label={t("Endereço MAC")}>

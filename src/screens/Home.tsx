@@ -1,27 +1,23 @@
-import { ChevronLeft, ChevronRight, Clapperboard, Film, Info, Play, Plus, RefreshCw, Search, Star, Tv } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clapperboard, Film, History, Info, Play, Plus, RefreshCw, Search, Star, Tv } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChannelLogo, Clock, ImdbBadge, Poster, ProgressBar } from "../components/ui";
-import { cleanTitle, getMeta, type Meta } from "../lib/meta";
+import { ChannelLogo, ImdbBadge, Poster } from "../components/ui";
+import { cleanTitle, genreName, getMeta, type Meta } from "../lib/meta";
 import { useParental } from "../lib/parental";
 import { clearCache, useQuery } from "../lib/query";
 import { isAdult } from "../lib/settings";
 import type { Channel, SeriesItem, VodItem } from "../lib/types";
-import { cn, fmtTime, progress } from "../lib/util";
-import { resetProviders, useApp, useFavs, useHistory, useProfile, useProvider } from "../store/app";
+import { cn, fmtTime } from "../lib/util";
+import { resetProviders, useApp, useFavs, useHistory, useProfile, useProvider, type HistoryEntry } from "../store/app";
 import { PosterCard, SeriesDetail, VodDetail } from "./Media";
 
-import { t, tn } from "../lib/i18n";
+import { t } from "../lib/i18n";
 type Featured = { kind: "vod"; item: VodItem; meta: Meta | null } | { kind: "series"; item: SeriesItem; meta: Meta | null };
-
-const greeting = () => {
-  const h = new Date().getHours();
-  return h < 6 ? t("Boa noite") : h < 13 ? t("Bom dia") : h < 20 ? t("Boa tarde") : t("Boa noite");
-};
 
 export function Home() {
   const profile = useProfile()!;
   const provider = useProvider()!;
   const nav = useApp((s) => s.nav);
+  const play = useApp((s) => s.play);
   const hideAdult = useApp((s) => s.settings.hideAdult);
   const metaOn = useApp((s) => s.settings.metadata);
   const [openVod, setOpenVod] = useState<VodItem | null>(null);
@@ -45,7 +41,6 @@ export function Home() {
   const recentSeries = useMemo(() => (series.data ?? []).filter((v) => !parS.hidden.has(v.categoryId ?? "")).slice(0, 24), [series.data, parS.hidden]);
 
   const featured = useFeatured(recentVod, recentSeries, metaOn);
-  const days = acc.data?.expires ? Math.ceil((acc.data.expires - Date.now()) / 864e5) : null;
 
   const reload = () => {
     clearCache();
@@ -55,37 +50,65 @@ export function Home() {
   };
   const refreshing = [acc, vod, series, vodCats, seriesCats].some((q) => q.loading);
 
+  // hero: what you were watching (hover/focus a card to preview it), else rotating featured titles
+  const history = useHistory();
+  const resumable = useMemo(
+    () => history.filter((h) => (h.play.type === "vod" || h.play.type === "episode") && !(h.position && h.duration && h.position / h.duration >= 0.95)).slice(0, 15),
+    [history],
+  );
+  const [selKey, setSelKey] = useState<string | null>(null);
+  const sel = resumable.find((h) => h.key === selKey) ?? resumable[0] ?? null;
+  const selMeta = useHistoryMeta(sel, metaOn);
+  const [fi, setFi] = useState(0);
+  const feat = featured[Math.min(fi, Math.max(featured.length - 1, 0))] as Featured | undefined;
+
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const i = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(i);
+  }, []);
+  const h24 = useApp((s) => s.settings.timeFormat24);
+  const left = sel?.duration && sel.position ? sel.duration - sel.position : undefined;
+
   return (
     <div className="h-full overflow-y-auto">
-      {/* top bar */}
-      <div className="relative z-20 flex items-center gap-4 px-10 pt-6 pb-8">
-        <div className="min-w-0 flex-1">
-          <div className="font-display text-2xl font-bold tracking-tight">
-            {greeting()}, <span className="text-gradient">{profile.name}</span>
-          </div>
-          <div className="mt-0.5 flex items-center gap-2 text-xs text-sky-100/50">
-            <span className={cn("size-1.5 rounded-full", acc.error ? "bg-rose-400" : acc.loading ? "bg-amber-300" : "bg-emerald-400 shadow-[0_0_8px] shadow-emerald-400")} />
-            {acc.error ? t("Sem ligação ao servidor · {0}", { 0: acc.error }) : acc.loading ? t("A ligar ao servidor…") : days != null ? tn(days, "Subscrição ativa · expira em 1 dia", "Subscrição ativa · expira em {n} dias") : t("Subscrição ativa")}
+      <div className="relative">
+        <HeroBackdrop src={sel ? selMeta?.backdrop : feat?.meta?.backdrop} />
+
+        {/* top-right tools */}
+        <div className="absolute top-5 right-10 z-20 flex items-start gap-2">
+          <button onClick={() => nav("search")} title={t("Procurar canais, filmes, séries…")} className="focusable grid size-10 place-items-center rounded-xl border border-white/10 bg-black/35 text-sky-100/80 backdrop-blur transition hover:text-white">
+            <Search className="size-[17px]" />
+          </button>
+          <button onClick={reload} disabled={refreshing} title={acc.error ? t("Sem ligação ao servidor · {0}", { 0: acc.error }) : t("Recarregar listas")} className="focusable relative grid size-10 place-items-center rounded-xl border border-white/10 bg-black/35 text-sky-100/80 backdrop-blur transition hover:text-white">
+            <RefreshCw className={cn("size-[17px]", refreshing && "animate-spin")} />
+            {acc.error && <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-rose-400" />}
+          </button>
+          <div className="rounded-xl border border-white/10 bg-black/35 px-3.5 py-1 text-right leading-tight backdrop-blur">
+            <div className="text-base font-semibold tabular-nums">{fmtTime(now, h24)}</div>
+            {left != null && <div className="text-[10px] text-sky-100/60 tabular-nums">{t("Termina às {0}", { 0: fmtTime(now + left * 1000, h24) })}</div>}
           </div>
         </div>
-        <button onClick={() => nav("search")} className="focusable flex h-11 w-80 items-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.04] px-4 text-sm text-sky-100/45 transition hover:border-sky-300/30 hover:bg-white/[0.07]">
-          <Search className="size-4" /> {t("Procurar canais, filmes, séries…")}
-        </button>
-        <button onClick={reload} disabled={refreshing} title={t("Recarregar listas")} className="focusable grid size-11 place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.04] text-sky-100/70 transition hover:text-white">
-          <RefreshCw className={cn("size-[18px]", refreshing && "animate-spin")} />
-        </button>
-        <Clock />
+
+        <div className="relative z-10 px-10">
+          {sel ? (
+            <ResumeHero key={sel.key} h={sel} meta={selMeta} onResume={() => play(sel.play)} />
+          ) : (
+            <FeaturedHero
+              featured={featured}
+              index={fi}
+              setIndex={setFi}
+              loading={cheap && (vod.loading || (!!recentVod.length && featured.length === 0 && metaOn))}
+              onDetails={(f) => (f.kind === "vod" ? setOpenVod(f.item) : setOpenSeries(f.item))}
+              onBrowse={() => nav(cheap ? "vod" : "live")}
+            />
+          )}
+
+          <ContinueRow items={resumable} selKey={sel?.key ?? null} onSelect={setSelKey} />
+        </div>
       </div>
 
-      <div className="-mt-4 px-10 pb-14">
-        <Hero
-          featured={featured}
-          loading={cheap && (vod.loading || (!!recentVod.length && featured.length === 0 && metaOn))}
-          onDetails={(f) => (f.kind === "vod" ? setOpenVod(f.item) : setOpenSeries(f.item))}
-          onBrowse={() => nav(cheap ? "vod" : "live")}
-        />
-
-        <ContinueRow />
+      <div className="relative z-10 px-10 pb-14">
         <LiveNowRow />
 
         {recentVod.length > 0 && (
@@ -150,37 +173,136 @@ function useFeatured(vod: VodItem[], series: SeriesItem[], enabled: boolean): Fe
   return list;
 }
 
-function Hero({ featured, loading, onDetails, onBrowse }: { featured: Featured[]; loading: boolean; onDetails: (f: Featured) => void; onBrowse: () => void }) {
+/** Metadata (backdrop, logo, plot…) for the history entry shown in the hero. */
+function useHistoryMeta(h: HistoryEntry | null, enabled: boolean): Meta | null {
+  const [meta, setMeta] = useState<Meta | null>(null);
+  const key = h?.key;
+  useEffect(() => {
+    setMeta(null);
+    if (!h || !enabled) return;
+    let alive = true;
+    getMeta(h.play.type === "episode" ? "series" : "movie", h.title)
+      .then((m) => alive && setMeta(m))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, enabled]);
+  return meta;
+}
+
+/* ---------------- hero ---------------- */
+
+/** Full-bleed backdrop that fades into the page background. */
+function HeroBackdrop({ src }: { src?: string }) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-0 h-[calc(min(34vh,300px)+240px)] overflow-hidden [mask-image:linear-gradient(to_bottom,black_55%,transparent)]">
+      {src ? <img key={src} src={src} alt="" className="absolute inset-0 size-full object-cover object-top animate-fade-up" draggable={false} /> : <StormArt />}
+      <div className="absolute inset-0 bg-gradient-to-r from-ink-950/95 via-ink-950/60 to-ink-950/10" />
+      <div className="absolute inset-0 bg-gradient-to-t from-ink-950/80 via-ink-950/30 to-transparent" />
+    </div>
+  );
+}
+
+const fmtLeft = (sec: number) => {
+  const m = Math.max(1, Math.round(sec / 60));
+  return m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m` : `${m}m`;
+};
+
+const Chip = ({ children }: { children: ReactNode }) => <span className="rounded-lg border border-white/15 bg-black/35 px-3 py-1 text-[13px] font-medium text-sky-50/90 backdrop-blur">{children}</span>;
+
+function HeroShell({ children }: { children: ReactNode }) {
+  return <section className="flex min-h-[min(34vh,300px)] pt-14 max-w-[760px] flex-col justify-end pb-4 animate-fade-up">{children}</section>;
+}
+
+function TitleBlock({ title, logo }: { title: string; logo?: string }) {
+  const [bad, setBad] = useState(false);
+  useEffect(() => setBad(false), [logo]);
+  return logo && !bad ? (
+    <img src={logo} alt={title} className="mb-3 max-h-20 max-w-[340px] object-contain object-left drop-shadow-[0_8px_30px_rgba(0,0,0,0.6)]" onError={() => setBad(true)} />
+  ) : (
+    <h1 className="mb-3 text-4xl leading-[1.05] font-bold drop-shadow-[0_4px_24px_rgba(0,0,0,0.7)]">{title}</h1>
+  );
+}
+
+function ResumeHero({ h, meta: m, onResume }: { h: HistoryEntry; meta: Meta | null; onResume: () => void }) {
+  const title = m?.title ?? cleanTitle(h.title).title;
+  return (
+    <HeroShell>
+      <TitleBlock title={title} logo={m?.logo} />
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {m?.year && <Chip>{m.year.slice(0, 4)}</Chip>}
+        {m?.genres.length ? <Chip>{m.genres.slice(0, 3).map(genreName).join(", ")}</Chip> : null}
+        {m?.runtime && <Chip>{m.runtime}</Chip>}
+        {m?.imdbRating ? (
+          <Chip>
+            <span className="inline-flex items-center gap-1">
+              <Star className="size-3.5 fill-current text-amber-300" /> {m.imdbRating.toFixed(1)}
+            </span>
+          </Chip>
+        ) : null}
+        {h.play.subtitle && <Chip>{h.play.subtitle}</Chip>}
+      </div>
+      {h.position && h.duration ? (
+        <div className="mb-3 flex items-center gap-3 text-sm text-sky-100/70">
+          <div className="h-1 w-28 overflow-hidden rounded-full bg-white/20">
+            <div className="bg-storm h-full rounded-full" style={{ width: `${(h.position / h.duration) * 100}%` }} />
+          </div>
+          {t("Falta {0}", { 0: fmtLeft(h.duration - h.position) })}
+        </div>
+      ) : null}
+      {m?.plot && <p className="line-clamp-2 max-w-[640px] text-[15px] leading-relaxed text-sky-50/80">{m.plot}</p>}
+      <div className="mt-5">
+        <HeroBtn primary onClick={onResume} icon={<Play className="size-5 fill-current" />}>
+          {t("Retomar")}
+        </HeroBtn>
+      </div>
+    </HeroShell>
+  );
+}
+
+function FeaturedHero({
+  featured,
+  index: i,
+  setIndex: setI,
+  loading,
+  onDetails,
+  onBrowse,
+}: {
+  featured: Featured[];
+  index: number;
+  setIndex: (i: number) => void;
+  loading: boolean;
+  onDetails: (f: Featured) => void;
+  onBrowse: () => void;
+}) {
   const play = useApp((s) => s.play);
   const toggleFav = useApp((s) => s.toggleFav);
   const favs = useFavs();
-  const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
 
-  useEffect(() => setI(0), [featured.length === 0]);
+  useEffect(() => setI(0), [featured.length === 0]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (featured.length < 2 || paused) return;
-    const t = setInterval(() => setI((x) => (x + 1) % featured.length), 9000);
+    const t = setInterval(() => setI((i + 1) % featured.length), 9000);
     return () => clearInterval(t);
-  }, [featured.length, paused]);
+  }, [featured.length, paused, i, setI]);
 
-  if (loading && !featured.length) return <div className="skeleton mb-10 h-[min(52vh,520px)] rounded-[28px]" />;
+  if (loading && !featured.length) return <div className="min-h-[min(34vh,300px)] pt-14" />;
 
   if (!featured.length)
     return (
-      <div className="relative mb-10 flex h-[min(44vh,420px)] items-end overflow-hidden rounded-[28px] border border-white/[0.06] bg-ink-800 p-10">
-        <StormArt />
-        <div className="relative max-w-xl">
-          <div className="mb-2 text-xs font-bold tracking-[0.25em] text-sky-300 uppercase">{t("HurricaneTV")}</div>
-          <h1 className="text-5xl font-bold">{t("Tudo o que vês, num só lugar.")}</h1>
-          <p className="mt-3 text-sky-100/60">{t("Canais em direto, guia de programação, filmes e séries da tua lista.")}</p>
-          <div className="mt-6 flex gap-3">
-            <HeroBtn primary onClick={onBrowse} icon={<Tv className="size-5" />}>
-              {t("Explorar")}
-            </HeroBtn>
-          </div>
+      <HeroShell>
+        <div className="mb-2 text-xs font-bold tracking-[0.25em] text-sky-300 uppercase">{t("HurricaneTV")}</div>
+        <h1 className="text-5xl font-bold">{t("Tudo o que vês, num só lugar.")}</h1>
+        <p className="mt-3 text-sky-100/60">{t("Canais em direto, guia de programação, filmes e séries da tua lista.")}</p>
+        <div className="mt-6 flex gap-3">
+          <HeroBtn primary onClick={onBrowse} icon={<Tv className="size-5" />}>
+            {t("Explorar")}
+          </HeroBtn>
         </div>
-      </div>
+      </HeroShell>
     );
 
   const f = featured[Math.min(i, featured.length - 1)];
@@ -193,37 +315,17 @@ function Hero({ featured, loading, onDetails, onBrowse }: { featured: Featured[]
   };
 
   return (
-    <section
-      className="relative mb-10 h-[min(52vh,520px)] overflow-hidden rounded-[28px] border border-white/[0.06] bg-ink-800 shadow-[0_40px_80px_-30px_rgba(0,0,0,0.9)]"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-    >
-      {m?.backdrop ? (
-        <img key={m.backdrop} src={m.backdrop} alt="" className="absolute inset-0 size-full scale-[1.02] object-cover animate-fade-up" draggable={false} />
-      ) : (
-        <StormArt />
-      )}
-      <div className="absolute inset-0 bg-gradient-to-r from-ink-950 via-ink-950/75 to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-t from-ink-950/90 via-transparent to-transparent" />
-
-      <div key={f.item.id} className="relative flex h-full max-w-[620px] flex-col justify-end p-10 animate-fade-up">
-        <div className="mb-3 flex items-center gap-2 text-[11px] font-bold tracking-[0.22em] text-sky-300 uppercase">
-          {f.kind === "vod" ? <Film className="size-3.5" /> : <Clapperboard className="size-3.5" />}
-          {f.kind === "vod" ? t("Filme em destaque") : t("Série em destaque")}
-        </div>
-        {m?.logo ? (
-          <img src={m.logo} alt={title} className="mb-4 max-h-28 max-w-[420px] object-contain object-left drop-shadow-[0_8px_30px_rgba(0,0,0,0.6)]" onError={(e) => (e.currentTarget.style.display = "none")} />
-        ) : (
-          <h1 className="mb-3 text-5xl leading-[1.05] font-bold">{title}</h1>
-        )}
-        <div className="flex flex-wrap items-center gap-3 text-sm text-sky-100/75">
+    <div onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+      <HeroShell key={f.item.id}>
+        <TitleBlock title={title} logo={m?.logo} />
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {(m?.year || f.item.year) && <Chip>{(m?.year || f.item.year)!.slice(0, 4)}</Chip>}
+          {m?.genres.length ? <Chip>{m.genres.slice(0, 3).map(genreName).join(", ")}</Chip> : null}
+          {m?.runtime && <Chip>{m.runtime}</Chip>}
           {m?.imdbRating ? <ImdbBadge value={m.imdbRating} size="lg" /> : null}
-          {(m?.year || f.item.year) && <span>{(m?.year || f.item.year)!.slice(0, 4)}</span>}
-          {m?.runtime && <Dot>{m.runtime}</Dot>}
-          {m?.genres.slice(0, 3).map((g) => <Dot key={g}>{g}</Dot>)}
         </div>
-        {m?.plot && <p className="mt-4 line-clamp-3 text-[15px] leading-relaxed text-sky-50/75">{m.plot}</p>}
-        <div className="mt-6 flex gap-3">
+        {m?.plot && <p className="line-clamp-2 max-w-[640px] text-[15px] leading-relaxed text-sky-50/80">{m.plot}</p>}
+        <div className="mt-5 flex gap-3">
           <HeroBtn primary onClick={watch} icon={<Play className="size-5 fill-current" />}>
             {f.kind === "vod" ? t("Ver agora") : t("Ver episódios")}
           </HeroBtn>
@@ -238,16 +340,15 @@ function Hero({ featured, loading, onDetails, onBrowse }: { featured: Featured[]
             {isFav ? <Star className="size-5 fill-current" /> : <Plus className="size-5" />}
           </button>
         </div>
-      </div>
-
-      {featured.length > 1 && (
-        <div className="absolute right-8 bottom-8 flex gap-2">
-          {featured.map((x, k) => (
-            <button key={x.item.id} onClick={() => setI(k)} aria-label={t("Destaque {0}", { 0: k + 1 })} className={cn("h-1.5 rounded-full transition-all", k === i ? "bg-storm w-8" : "w-3 bg-white/25 hover:bg-white/50")} />
-          ))}
-        </div>
-      )}
-    </section>
+        {featured.length > 1 && (
+          <div className="mt-5 flex gap-2">
+            {featured.map((x, k) => (
+              <button key={x.item.id} onClick={() => setI(k)} aria-label={t("Destaque {0}", { 0: k + 1 })} className={cn("h-1.5 rounded-full transition-all", k === i ? "bg-storm w-8" : "w-3 bg-white/25 hover:bg-white/50")} />
+            ))}
+          </div>
+        )}
+      </HeroShell>
+    </div>
   );
 }
 
@@ -260,13 +361,6 @@ function StormArt() {
     </div>
   );
 }
-
-const Dot = ({ children }: { children: ReactNode }) => (
-  <span className="flex items-center gap-3">
-    <span className="size-1 rounded-full bg-sky-100/35" />
-    {children}
-  </span>
-);
 
 function HeroBtn({ children, onClick, icon, primary }: { children: ReactNode; onClick: () => void; icon: ReactNode; primary?: boolean }) {
   return (
@@ -289,9 +383,9 @@ function Row({ title, icon, children, action }: { title: string; icon: ReactNode
   const ref = useRef<HTMLDivElement>(null);
   const scroll = (d: number) => ref.current?.scrollBy({ left: d * ref.current.clientWidth * 0.8, behavior: "smooth" });
   return (
-    <section className="group/row mb-9">
-      <div className="mb-3.5 flex items-center gap-2.5">
-        <span className="grid size-7 place-items-center rounded-lg bg-white/[0.06] text-sky-300">{icon}</span>
+    <section className="group/row mb-8">
+      <div className="mb-3 flex items-center gap-2.5">
+        <span className="text-sky-100/70">{icon}</span>
         <h2 className="text-lg font-bold">{title}</h2>
         {action && (
           <button onClick={action.onClick} className="focusable ml-2 rounded-lg px-2 py-1 text-xs font-semibold text-sky-100/45 transition hover:text-sky-300">
@@ -314,51 +408,99 @@ function Row({ title, icon, children, action }: { title: string; icon: ReactNode
   );
 }
 
-function ContinueRow() {
-  const play = useApp((s) => s.play);
-  const items = useHistory().filter((h) => (h.play.type === "vod" || h.play.type === "episode") && h.position && h.duration && h.position / h.duration < 0.95);
+function ContinueRow({ items, selKey, onSelect }: { items: HistoryEntry[]; selKey: string | null; onSelect: (key: string) => void }) {
   if (!items.length) return null;
   return (
-    <Row title={t("Continuar a ver")} icon={<Play className="size-4" />}>
-      {items.slice(0, 15).map((h) => (
-        <button key={h.key} onClick={() => play(h.play)} className="focusable group w-[300px] shrink-0 rounded-2xl text-left">
-          <div className="relative overflow-hidden rounded-2xl ring-1 ring-white/[0.08] transition group-hover:ring-sky-300/50">
-            <Poster src={h.poster} name={h.title} className="aspect-video" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
-            <div className="absolute inset-0 grid place-items-center opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
-              <span className="bg-storm grid size-14 place-items-center rounded-full text-ink-950 shadow-xl">
-                <Play className="ml-0.5 size-6 fill-current" />
-              </span>
-            </div>
-            <div className="absolute inset-x-3 bottom-3">
-              <div className="truncate text-sm font-bold">{h.title}</div>
-              {h.play.subtitle && h.play.subtitle !== h.title && <div className="truncate text-xs text-sky-100/60">{h.play.subtitle}</div>}
-              <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/20">
-                <div className="bg-storm h-full rounded-full" style={{ width: `${(h.position! / h.duration!) * 100}%` }} />
-              </div>
-            </div>
-          </div>
-        </button>
+    <Row title={t("Continuar a ver")} icon={<History className="size-[18px]" />}>
+      {items.map((h) => (
+        <ContinueCard key={h.key} h={h} active={h.key === selKey} onSelect={() => onSelect(h.key)} />
       ))}
     </Row>
   );
 }
 
+function ContinueCard({ h, active, onSelect }: { h: HistoryEntry; active: boolean; onSelect: () => void }) {
+  const play = useApp((s) => s.play);
+  const metaOn = useApp((s) => s.settings.metadata);
+  const m = useHistoryMeta(h, metaOn);
+  const pct = h.position && h.duration ? Math.round((h.position / h.duration) * 100) : 0;
+  const ep = h.play.type === "episode" ? h.play.subtitle?.split(" · ")[0] : undefined;
+  const title = m?.title ?? cleanTitle(h.title).title;
+  const year = m?.year?.slice(0, 4);
+  const line = h.play.type === "episode" && h.play.subtitle ? h.play.subtitle : m?.plot;
+  return (
+    <button
+      onClick={() => play(h.play)}
+      onMouseEnter={onSelect}
+      onFocus={onSelect}
+      className="focusable group w-[270px] shrink-0 rounded-xl text-left"
+    >
+      <div className={cn("overflow-hidden rounded-xl bg-ink-800/90 ring-2 transition", active ? "ring-violet-400/80" : "ring-transparent group-hover:ring-white/20")}>
+        <div className="relative">
+          <Poster src={m?.backdrop ?? h.poster} name={h.title} className="aspect-video" />
+          {pct > 0 && <span className="absolute top-2 right-2 rounded-md bg-violet-600 px-1.5 py-0.5 text-[11px] font-bold">{pct}%</span>}
+          <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-black/90 to-transparent px-2.5 pt-8 pb-2 text-[11px] font-semibold tabular-nums">
+            <span>{ep ?? year}</span>
+            <span className="ml-auto flex items-center gap-2 text-sky-100/85">
+              {m?.imdbRating ? (
+                <span className="inline-flex items-center gap-0.5">
+                  <Star className="size-3 fill-current text-amber-300" /> {m.imdbRating.toFixed(1)}
+                </span>
+              ) : null}
+              {h.duration ? fmtClock(h.duration) : ""}
+            </span>
+          </div>
+          <div className="absolute inset-x-0 bottom-0 h-[3px] bg-white/20">
+            <div className="h-full bg-violet-400" style={{ width: `${Math.max(pct, 2)}%` }} />
+          </div>
+        </div>
+        <div className="px-3 pt-2.5 pb-3">
+          <div className="truncate text-[13px] font-bold">{year && h.play.type !== "episode" ? `${title} - ${year}` : title}</div>
+          <div className="mt-0.5 truncate text-[11px] text-sky-100/50">{line ?? (h.duration && h.position ? fmtLeftLabel(h.duration - h.position) : "")}</div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+const fmtClock = (sec: number) => {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+};
+
+const fmtLeftLabel = (sec: number) => t("Falta {0}", { 0: fmtLeft(sec) });
+
 function LiveNowRow() {
   const profile = useProfile()!;
   const provider = useProvider()!;
   const favs = useFavs();
+  const history = useHistory();
   const nav = useApp((s) => s.nav);
   const all = useQuery(`live-all:${profile.id}`, () => provider.liveChannels());
   const cats = useQuery(`live-cats:${profile.id}`, () => provider.liveCategories());
   const par = useParental("live", cats.data);
-  const channels = useMemo(
-    () => (favs.live.length ? favs.live : (all.data ?? []).filter((c) => !c.isRadio).slice(0, 16)).filter((c) => !par.hidden.has(c.categoryId ?? "")),
-    [favs.live, all.data, par.hidden],
-  );
+  // favourites first, then what you watched recently, then the rest of the list
+  const channels = useMemo(() => {
+    const byStream = new Map((all.data ?? []).map((c) => [c.stream, c]));
+    const seen = new Set<string>();
+    const recent: Channel[] = [];
+    for (const h of [...history].sort((x, y) => y.at - x.at)) {
+      if (h.play.type !== "live") continue;
+      const c = byStream.get(h.play.stream);
+      if (c && !seen.has(c.id)) {
+        seen.add(c.id);
+        recent.push(c);
+      }
+    }
+    const rest = (all.data ?? []).filter((c) => !c.isRadio);
+    const seen2 = new Set<string>();
+    return [...favs.live, ...recent, ...rest].filter((c) => (seen2.has(c.id) ? false : (seen2.add(c.id), true)) && !par.hidden.has(c.categoryId ?? "")).slice(0, 20);
+  }, [history, all.data, favs.live, par.hidden]);
   if (!channels.length) return null;
   return (
-    <Row title={favs.live.length ? t("Os teus canais, agora") : t("A dar agora")} icon={<Tv className="size-4" />} action={{ label: t("Guia TV"), onClick: () => nav("epg") }}>
+    <Row title={t("TV em direto")} icon={<Tv className="size-[18px]" />} action={{ label: t("Guia TV"), onClick: () => nav("epg") }}>
       {channels.map((c, i) => (
         <LiveCard key={c.id} ch={c} list={channels} index={i} />
       ))}
@@ -367,41 +509,31 @@ function LiveNowRow() {
 }
 
 function LiveCard({ ch, list, index }: { ch: Channel; list: Channel[]; index: number }) {
-  const provider = useProvider()!;
   const play = useApp((s) => s.play);
-  const h24 = useApp((s) => s.settings.timeFormat24);
-  const epg = useQuery(`epg:${ch.id}`, () => provider.epg(ch, 3));
-  const now = Date.now();
-  const cur = epg.data?.find((p) => p.start <= now && p.end > now);
   return (
     <button
       onClick={() => play({ title: ch.name, stream: ch.stream, type: "live", channels: list, index, poster: ch.logo, ua: ch.ua, referer: ch.referer })}
-      className="focusable group flex w-[280px] shrink-0 flex-col gap-3 rounded-2xl border border-white/[0.06] bg-ink-800/80 p-4 text-left transition hover:-translate-y-0.5 hover:border-sky-300/30 hover:bg-ink-700/80"
+      title={ch.name}
+      className="focusable group relative h-[110px] w-[170px] shrink-0 overflow-hidden rounded-xl bg-slate-100 ring-1 ring-white/10 transition hover:ring-sky-300/50"
     >
-      <div className="flex items-center gap-3">
-        <ChannelLogo src={ch.logo} name={ch.name} className="size-11 rounded-xl" />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-bold">{ch.name}</div>
-          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-300">
-            <span className="size-1.5 animate-pulse rounded-full bg-rose-400" /> {t("Em direto")}
-          </div>
-        </div>
-        <span className="grid size-9 place-items-center rounded-full bg-white/[0.06] text-sky-100/60 transition group-hover:bg-sky-400 group-hover:text-ink-950">
-          <Play className="ml-0.5 size-4 fill-current" />
+      <TileLogo src={ch.logo} name={ch.name} />
+      <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/80 to-transparent px-2.5 pt-4 pb-1.5 text-[11px] font-semibold text-white">{ch.name}</span>
+      <span className="absolute inset-0 grid place-items-center bg-black/45 opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
+        <span className="bg-storm grid size-11 place-items-center rounded-full text-ink-950">
+          <Play className="ml-0.5 size-5 fill-current" />
         </span>
-      </div>
-      {cur ? (
-        <div>
-          <div className="truncate text-[13px] text-sky-50/85">{cur.title}</div>
-          <div className="mt-2 flex items-center gap-2 text-[10px] text-sky-100/40 tabular-nums">
-            {fmtTime(cur.start, h24)}
-            <ProgressBar value={progress(cur)} className="flex-1" />
-            {fmtTime(cur.end, h24)}
-          </div>
-        </div>
-      ) : (
-        <div className="text-[13px] text-sky-100/35">{epg.loading ? "…" : t("Sem informação de programação")}</div>
-      )}
+      </span>
     </button>
+  );
+}
+
+/** Logo centred in the tile (above the name strip); falls back to initials if the image fails. */
+function TileLogo({ src, name }: { src?: string; name: string }) {
+  const [err, setErr] = useState(false);
+  if (!src || err) return <ChannelLogo name={name} className="absolute inset-0 !rounded-none text-xl" />;
+  return (
+    <div className="absolute inset-x-4 top-3 bottom-9">
+      <img src={src} alt="" loading="lazy" onError={() => setErr(true)} className="size-full object-contain" draggable={false} />
+    </div>
   );
 }

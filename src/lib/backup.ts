@@ -23,8 +23,8 @@ export interface ExportOptions {
   settings: boolean;
 }
 
-// never travel with a backup: the PIN would lock a friend out, the TMDB key is personal
-const PRIVATE_SETTINGS: (keyof Settings)[] = ["parentalPinHash", "tmdbKey"];
+// never travel with a backup: the PIN would lock a friend out, 
+const PRIVATE_SETTINGS: (keyof Settings)[] = ["parentalPinHash"];
 
 export function buildBackup(o: ExportOptions): BackupFile {
   const s = useApp.getState();

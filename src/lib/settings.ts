@@ -12,8 +12,6 @@ export interface Settings {
   externalPlayer: string;
   /** fetch posters, synopsis, IMDb rating and cast online */
   metadata: boolean;
-  /** optional TMDB key (v3 key or v4 read token) for Portuguese synopses + cast photos */
-  tmdbKey: string;
   /** SHA-256 of the parental PIN; "" = parental control off */
   parentalPinHash: string;
   /** adult categories always need the PIN (instead of only being hidden) */
@@ -32,7 +30,6 @@ export const defaultSettings: Settings = {
   subLang: "",
   externalPlayer: "",
   metadata: true,
-  tmdbKey: "",
   parentalPinHash: "",
   parentalLockAdult: true,
   language: "en",

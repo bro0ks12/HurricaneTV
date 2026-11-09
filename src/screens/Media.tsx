@@ -1,7 +1,8 @@
 import { ArrowDown, ArrowUp, CalendarDays, Clapperboard, Clock3, Film, LayoutGrid, Play, Star, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button, CastRow, CategoryList, Empty, ImdbBadge, Pill, Poster, Rating, ScreenHeader, SearchBox, Spinner, useIncremental } from "../components/ui";
-import { cleanTitle, seasonMeta, useInView, useMeta, type Meta as MetaT } from "../lib/meta";
+import { tmdbEnabled } from "../lib/http";
+import { cleanTitle, genreName, seasonMeta, useInView, useMeta, type Meta as MetaT } from "../lib/meta";
 import { useParental } from "../lib/parental";
 import { useQuery } from "../lib/query";
 import { isAdult } from "../lib/settings";
@@ -163,7 +164,7 @@ export function PosterCard({ item, kind, onClick }: { item: Item; kind: Kind; on
       <div className="flex items-center gap-1.5 truncate text-[11px] text-sky-100/45">
         {year && <span>{year.slice(0, 4)}</span>}
         {year && meta?.genres?.[0] && <span className="size-0.5 rounded-full bg-sky-100/40" />}
-        {meta?.genres?.[0] && <span className="truncate">{meta.genres[0]}</span>}
+        {meta?.genres?.[0] && <span className="truncate">{genreName(meta.genres[0])}</span>}
         {!year && !meta?.genres?.[0] && " "}
       </div>
     </button>
@@ -255,13 +256,13 @@ function DetailHero({
   actions: React.ReactNode;
   compact?: boolean;
 }) {
-  const hasTmdb = useApp((s) => !!s.settings.tmdbKey.trim());
+  const hasTmdb = tmdbEnabled();
   const p = posterPair(meta, item.poster);
   const clean = cleanTitle(item.name);
   const title = meta?.confident ? meta.title : clean.title;
   // TMDB gives Portuguese synopses; without it the provider's text is usually PT, Cinemeta's is EN
   const plot = (hasTmdb ? meta?.plot : undefined) || ownPlot || meta?.plot;
-  const genres = meta?.genres?.length ? meta.genres : ownGenre ? ownGenre.split(/\s*[,/]\s*/).filter(Boolean) : [];
+  const genres = (meta?.genres?.length ? meta.genres : ownGenre ? ownGenre.split(/\s*[,/]\s*/).filter(Boolean) : []).map(genreName);
   const director = meta?.director?.length ? meta.director.join(", ") : ownDirector;
   const cast = meta?.cast?.length
     ? meta.cast
@@ -399,13 +400,13 @@ export function VodDetail({ item, onClose }: { item: VodItem; onClose: () => voi
 
 /* ---------------- series ---------------- */
 
-const GENERIC_EP = /^(epis[oó]dio|episode|ep\.?)\s*\d+$|S\d{1,2}\s*E\d{1,3}/i;
+const GENERIC_EP = /^(epis[oó]dio|[eé]pisode|folge|episode|ep\.?)\s*\d+$|S\d{1,2}\s*E\d{1,3}/i;
 
 export function SeriesDetail({ item, onClose }: { item: SeriesItem; onClose: () => void }) {
   const provider = useProvider()!;
   const play = useApp((s) => s.play);
   const toggleFav = useApp((s) => s.toggleFav);
-  const hasTmdb = useApp((s) => !!s.settings.tmdbKey.trim());
+  const hasTmdb = tmdbEnabled();
   const fav = useFavs().series.some((v) => v.id === item.id);
   const info = useQuery(`seriesinfo:${item.id}`, () => provider.seriesInfo(item));
   const meta = useMeta("series", item.name, item.year);

@@ -1,3 +1,4 @@
+import { t } from "../lib/i18n";
 import type { Category, Channel, Program, Provider, SeriesItem, VodItem } from "../lib/types";
 
 /** Offline demo source using public test streams — handy to explore the UI without a subscription. */
@@ -110,24 +111,24 @@ export function createDemo(): Provider {
   return {
     kind: "demo",
     account: () => wait({ status: "Active", expires: Date.now() + 365 * 864e5, maxConnections: 2, activeConnections: 0, serverUrl: "demo://hurricanetv", isTrial: true }),
-    liveCategories: () => wait(liveCats),
+    liveCategories: () => wait(liveCats.map((c) => ({ ...c, name: t(c.name) }))),
     liveChannels: (cat) => wait(channels.filter((c) => !cat || c.categoryId === cat)),
-    vodCategories: () => wait(vodCats),
+    vodCategories: () => wait(vodCats.map((c) => ({ ...c, name: t(c.name) }))),
     vodItems: (cat) => wait(vod.filter((c) => !cat || c.categoryId === cat)),
     vodInfo: (item) =>
       wait({
         plot: `${item.name} — um filme de demonstração. O vídeo é um stream de teste público.`,
-        genre: vodCats.find((c) => c.id === item.categoryId)?.name,
+        genre: t(vodCats.find((c) => c.id === item.categoryId)?.name ?? ""),
         cast: "Ana Ribeiro, João Matos, Sofia Lima",
         director: "M. Duarte",
         duration: "1h 42m",
       }),
-    seriesCategories: () => wait(vodCats),
+    seriesCategories: () => wait(vodCats.map((c) => ({ ...c, name: t(c.name) }))),
     seriesItems: (cat) => wait(series.filter((c) => !cat || c.categoryId === cat)),
     seriesInfo: (item) =>
       wait({
         plot: item.plot,
-        genre: vodCats.find((c) => c.id === item.categoryId)?.name,
+        genre: t(vodCats.find((c) => c.id === item.categoryId)?.name ?? ""),
         seasons: [1, 2, 3].map((sn) => ({
           num: sn,
           name: `Temporada ${sn}`,
@@ -135,7 +136,7 @@ export function createDemo(): Provider {
             id: `${item.id}-${sn}-${i + 1}`,
             num: i + 1,
             season: sn,
-            title: `Episódio ${i + 1}`,
+            title: t("Episódio {0}", { 0: i + 1 }),
             plot: "Descrição do episódio de demonstração.",
             duration: "45m",
             stream: MP4[(i + sn) % MP4.length],

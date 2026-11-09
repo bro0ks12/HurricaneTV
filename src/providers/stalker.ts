@@ -1,3 +1,4 @@
+import { t } from "../lib/i18n";
 import { httpGet } from "../lib/http";
 import type { Category, Channel, Episode, Profile, Program, Provider, SeriesInfo, SeriesItem, VodItem } from "../lib/types";
 
@@ -59,7 +60,7 @@ export function createStalker(p: Profile): Provider {
   };
 
   const connect = async () => {
-    let lastErr: unknown = new Error("Portal não encontrado");
+    let lastErr: unknown = new Error(t("Portal não encontrado"));
     for (const ep of endpoints(p.portal!)) {
       try {
         token = "";
@@ -190,7 +191,7 @@ export function createStalker(p: Profile): Provider {
                 id: `${s.id}:${n}`,
                 num: Number(n),
                 season: sn,
-                title: `Episódio ${n}`,
+                title: t("Episódio {0}", { 0: n }),
                 image: s.screenshot_uri || item.poster,
                 stream: JSON.stringify({ cmd: s.cmd, series: n }),
               }),

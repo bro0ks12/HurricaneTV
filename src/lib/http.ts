@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
 export const inTauri = isTauri();
@@ -30,13 +31,20 @@ export async function httpJson<T = unknown>(url: string, headers?: Record<string
   try {
     return JSON.parse(text) as T;
   } catch {
-    throw new Error("Resposta inválida do servidor");
+    throw new Error(t("Resposta inválida do servidor"));
   }
 }
 
 let proxyPort: number | null = null;
+/** True when this build has a TMDB key compiled in (the key itself never reaches JS). */
+let tmdbOn = false;
+export const tmdbEnabled = () => tmdbOn;
+export const tmdbGet = <T = unknown>(path: string, params: Record<string, string> = {}) =>
+  invoke<string>("tmdb_get", { path, params }).then((b) => JSON.parse(b) as T);
+
 export async function initProxy() {
   if (inTauri && proxyPort == null) proxyPort = await invoke<number>("proxy_port");
+  if (inTauri) tmdbOn = await invoke<boolean>("tmdb_enabled").catch(() => false);
 }
 
 export interface StreamHeaders {

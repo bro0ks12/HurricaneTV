@@ -2,13 +2,13 @@
  * Movie / series metadata: poster, backdrop, synopsis, IMDb rating, cast…
  *
  * - Cinemeta (public, no key): IMDb ids + rating, posters, cast names, episode stills.
- * - TMDB (optional API key in Settings): Portuguese synopsis/titles and cast photos.
+ * - TMDB (key compiled into the app, see src-tauri/build.rs): Portuguese synopsis/titles and cast photos.
  *
  * Results are cached in localStorage so each title is looked up once.
  */
-import { lang } from "./i18n";
+import { lang, t } from "./i18n";
 import { useEffect, useRef, useState } from "react";
-import { httpJson } from "./http";
+import { httpJson, tmdbEnabled, tmdbGet } from "./http";
 import { getSettings } from "./settings";
 
 export type MetaKind = "movie" | "series";
@@ -80,12 +80,12 @@ const norm = (s: string) =>
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ") // keep non-Latin scripts (Greek, Cyrillic, Arabic, CJK…) instead of emptying them
     .trim();
 
 /* ---------------- cache ---------------- */
 
-const CACHE_KEY = "hurricane-meta-v2";
+const CACHE_KEY = "hurricane-meta-v3";
 const TTL_HIT = 30 * 864e5;
 const TTL_MISS = 3 * 864e5;
 const MAX_ENTRIES = 4000;
@@ -150,6 +150,9 @@ const GENRES_PT: Record<string, string> = {
   thriller: "Thriller", war: "Guerra", western: "Western", "game-show": "Concurso",
 };
 const ptGenre = (g: string) => GENRES_PT[g.toLowerCase()] ?? g;
+
+/** Genre label in the UI language (works for English ids, cached Portuguese names and already-localised TMDB names). */
+export const genreName = (g: string) => t(GENRES_PT[g.toLowerCase()] ?? g);
 
 /* ---------------- Cinemeta ---------------- */
 
@@ -241,24 +244,12 @@ async function viaCinemeta(kind: MetaKind, title: string, year?: string): Promis
   return fromCinemeta(full ?? best.item, best.confident);
 }
 
-/* ---------------- TMDB (optional) ---------------- */
+/* ---------------- TMDB (when the build has a key) ---------------- */
 
-const TMDB = "https://api.themoviedb.org/3";
 const TMDB_LANG = { pt: "pt-PT", en: "en-US", es: "es-ES", fr: "fr-FR", de: "de-DE", it: "it-IT" } as const;
 const IMG = "https://image.tmdb.org/t/p/";
 
-function tmdbUrl(path: string, params: Record<string, string> = {}) {
-  const key = getSettings().tmdbKey.trim();
-  const qs = new URLSearchParams({ language: TMDB_LANG[lang()], ...params });
-  // v4 read tokens are long JWTs (sent as header); v3 keys go in the query
-  if (key.length <= 40) qs.set("api_key", key);
-  return `${TMDB}${path}?${qs}`;
-}
-function tmdbHeaders(): Record<string, string> | undefined {
-  const key = getSettings().tmdbKey.trim();
-  return key.length > 40 ? { Authorization: `Bearer ${key}`, Accept: "application/json" } : undefined;
-}
-const tmdb = (path: string, params?: Record<string, string>) => queued(() => httpJson<Any>(tmdbUrl(path, params), tmdbHeaders()));
+const tmdb = (path: string, params: Record<string, string> = {}) => queued(() => tmdbGet<Any>(path, { language: TMDB_LANG[lang()], ...params }));
 
 async function viaTmdb(kind: MetaKind, title: string, year?: string): Promise<Meta | null> {
   const type = kind === "movie" ? "movie" : "tv";
@@ -308,7 +299,7 @@ async function viaTmdb(kind: MetaKind, title: string, year?: string): Promise<Me
 
 /** Portuguese episode names/plots/stills for one season (TMDB only). */
 export async function seasonMeta(tmdbId: number, season: number): Promise<Record<string, EpisodeMeta>> {
-  if (!getSettings().tmdbKey.trim()) return {};
+  if (!tmdbEnabled()) return {};
   const d = await tmdb(`/tv/${tmdbId}/season/${season}`).catch(() => null);
   const out: Record<string, EpisodeMeta> = {};
   for (const e of d?.episodes ?? []) {
@@ -322,7 +313,7 @@ export async function seasonMeta(tmdbId: number, season: number): Promise<Record
 export function getMeta(kind: MetaKind, rawName: string, yearHint?: string): Promise<Meta | null> {
   const { title, year: y } = cleanTitle(rawName);
   const year = (yearHint && /^\d{4}/.test(yearHint) ? yearHint.slice(0, 4) : undefined) ?? y;
-  const useTmdb = !!getSettings().tmdbKey.trim();
+  const useTmdb = tmdbEnabled();
   const key = `${useTmdb ? `t-${lang()}` : "c"}:${kind}:${norm(title)}:${year ?? ""}`;
   const c = loadCache()[key];
   if (c && Date.now() - c.at < (c.m ? TTL_HIT : TTL_MISS)) return Promise.resolve(c.m);

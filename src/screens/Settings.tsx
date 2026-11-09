@@ -13,7 +13,6 @@ export function Settings() {
   const { settings, updateSettings } = useApp();
   const [cleared, setCleared] = useState(false);
   const [metaCleared, setMetaCleared] = useState(false);
-  const [showKey, setShowKey] = useState(false);
 
   return (
     <div className="flex h-full flex-col">
@@ -96,30 +95,7 @@ export function Settings() {
             <Row icon={<Database />} title={t("Capas, sinopses, IMDb e elenco")} hint={t("Procura cada filme e série numa base de dados online (Cinemeta) e completa o que o fornecedor não traz.")}>
               <Toggle value={settings.metadata} onChange={(v) => updateSettings({ metadata: v })} />
             </Row>
-            <Row
-              icon={<KeyRound />}
-              title={t("Chave TMDB (opcional)")}
-              hint={t("Sinopses em português e fotos dos atores. Chave grátis em themoviedb.org → Definições → API.")}
-            >
-              <div className="flex items-center gap-1.5">
-                <input
-                  type={showKey ? "text" : "password"}
-                  value={settings.tmdbKey}
-                  onChange={(e) => {
-                    updateSettings({ tmdbKey: e.target.value.trim() });
-                    setMetaCleared(false);
-                  }}
-                  placeholder={t("Chave API ou token de leitura")}
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="focusable h-10 w-64 rounded-xl border border-white/12 bg-ink-950/50 px-3 font-mono text-xs text-white placeholder:font-sans placeholder:text-sky-100/30 focus:border-sky-400/70 focus:outline-none"
-                />
-                <button onClick={() => setShowKey((s) => !s)} className="focusable h-10 rounded-xl border border-white/12 bg-white/5 px-3 text-xs font-bold text-sky-100/70 hover:bg-white/10">
-                  {showKey ? t("Ocultar") : t("Ver")}
-                </button>
-              </div>
-            </Row>
-            <Row icon={<Eraser />} title={t("Limpar cache de metadados")} hint={t("Volta a procurar capas e informação (útil depois de adicionar a chave TMDB).")}>
+            <Row icon={<Eraser />} title={t("Limpar cache de metadados")} hint={t("Volta a procurar capas e informação.")}>
               <Button
                 variant="ghost"
                 onClick={() => {
@@ -319,7 +295,7 @@ function BackupSection() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold">{t("Exportar perfis")}</div>
-            <div className="text-xs text-sky-100/50">{t("Guarda um ficheiro .json na pasta Transferências. Serve para mudar de PC ou passar a tua lista a um amigo. O PIN e a chave TMDB nunca são incluídos.")}</div>
+            <div className="text-xs text-sky-100/50">{t("Guarda um ficheiro .json na pasta Transferências. Serve para mudar de PC ou passar a tua lista a um amigo. O PIN nunca é incluído.")}</div>
             <div className="mt-3 flex flex-wrap gap-2">
               {profiles.map((p) => (
                 <button
