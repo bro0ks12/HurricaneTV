@@ -67,7 +67,7 @@ pub struct Hdrs {
     pub referer: Option<String>,
 }
 
-fn proxied(target: &str, hd: &Hdrs) -> String {
+pub fn proxied(target: &str, hd: &Hdrs) -> String {
     let mut s = format!("http://127.0.0.1:{}/p?u={}", port(), urlencode(target));
     if let Some(ua) = &hd.ua {
         s.push_str("&ua=");
@@ -137,6 +137,9 @@ fn handle(req: Request) {
         Ok(u) => u,
         Err(_) => return respond_err(req, 400, "bad url"),
     };
+    if parsed.path() == "/tx" {
+        return crate::transcode::serve(req, &parsed);
+    }
     let mut target = None;
     let mut hd = Hdrs::default();
     let mut live = false;

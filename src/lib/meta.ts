@@ -177,7 +177,7 @@ export function titleSimilarity(a: string, b: string): number {
 
 /**
  * Choose the best search hit. `confident` is only true when the title really
- * matches (and the year agrees when we know it) — a wrong synopsis/cast is
+ * matches (and the year agrees when we know it) - a wrong synopsis/cast is
  * worse than none, so callers discard non-confident hits.
  */
 function pickBest<T>(items: T[], title: string, year: string | undefined, names: (x: T) => string[], yr: (x: T) => string | undefined) {

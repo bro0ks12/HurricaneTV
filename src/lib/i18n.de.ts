@@ -1,5 +1,12 @@
 /** German strings. Key = original Portuguese text. Missing keys fall back to Portuguese. */
 export const DE: Record<string, string> = {
+  "O conversor não está incluído nesta versão da app.": "Der Konverter ist in dieser Version der App nicht enthalten.",
+  "A preparar o ficheiro…": "Datei wird vorbereitet…",
+  "Não foi possível converter: {0}": "Konvertierung nicht möglich: {0}",
+  "Não foi possível converter este ficheiro.": "Diese Datei konnte nicht konvertiert werden.",
+  "Não foi possível ler a duração do ficheiro.": "Die Dauer der Datei konnte nicht gelesen werden.",
+  "Sem imagem: este ficheiro usa um formato de vídeo (HEVC/H.265…) que a app não consegue mostrar. Instala a extensão \"HEVC Video Extensions\" da Microsoft Store ou abre no VLC.":
+    "Kein Bild: Diese Datei nutzt ein Videoformat (HEVC/H.265…), das die App nicht anzeigen kann. Installiere die „HEVC Video Extensions“ aus dem Microsoft Store oder öffne sie in VLC.",
   "Sem áudio: este ficheiro pode usar um formato de áudio (AC3, DTS…) que a app não consegue reproduzir.":
     "Kein Ton: Diese Datei nutzt möglicherweise ein Audioformat (AC3, DTS…), das die App nicht abspielen kann.",
   "Ilimitado": "Unbegrenzt",
@@ -149,7 +156,7 @@ export const DE: Record<string, string> = {
   "Controlo parental": "Kindersicherung",
   "Controlo parental ativado.": "Kindersicherung aktiviert.",
   "Controlo parental desativado.": "Kindersicherung deaktiviert.",
-  "Cria um perfil com canais, filmes e séries de demonstração que usam vídeos de teste públicos — útil para experimentar a interface sem uma subscrição.":
+  "Cria um perfil com canais, filmes e séries de demonstração que usam vídeos de teste públicos - útil para experimentar a interface sem uma subscrição.":
     "Erstellt ein Profil mit Demo-Sendern, -Filmen und -Serien, die öffentliche Testvideos nutzen – praktisch, um die Oberfläche ohne Abo auszuprobieren.",
   "Criada em": "Erstellt am",
   Criação: "Entwickelt von",
@@ -186,7 +193,7 @@ export const DE: Record<string, string> = {
   "Este canal não tem arquivo para este programa": "Dieser Sender hat kein Archiv für diese Sendung",
   "Este ficheiro não é um backup da HurricaneTV.": "Diese Datei ist kein HurricaneTV-Backup.",
   "Ex.: Casa, Sala, Servidor 1": "z. B. Zuhause, Wohnzimmer, Server 1",
-  "Exemplo de legenda — assim vai aparecer.": "Beispiel-Untertitel – so wird er aussehen.",
+  "Exemplo de legenda - assim vai aparecer.": "Beispiel-Untertitel – so wird er aussehen.",
   Expira: "Läuft ab",
   Explorar: "Entdecken",
   Exportar: "Exportieren",
@@ -368,7 +375,7 @@ export const DE: Record<string, string> = {
   "ativas / máximo": "aktiv / maximal",
   ficheiro: "Datei",
   forçadas: "erzwungen",
-  "imagem (PGS/VobSub) — usa o VLC": "Bild (PGS/VobSub) – nutze VLC",
+  "imagem (PGS/VobSub) - usa o VLC": "Bild (PGS/VobSub) – nutze VLC",
   padrão: "Standard",
   versão: "Version",
   "{0} · desde o início": "{0} · von Anfang an",
@@ -389,7 +396,7 @@ export const DE: Record<string, string> = {
   "Indica um URL http(s) ou escolhe um ficheiro de playlist.": "Gib eine http(s)-URL ein oder wähle eine Playlist-Datei.",
   "Este ficheiro não parece uma playlist M3U.": "Diese Datei sieht nicht wie eine M3U-Playlist aus.",
   "Ficheiro: {0}": "Datei: {0}",
-  "O ficheiro da playlist já não está guardado — importa-o outra vez.": "Die Playlist-Datei ist nicht mehr gespeichert – importiere sie erneut.",
+  "O ficheiro da playlist já não está guardado - importa-o outra vez.": "Die Playlist-Datei ist nicht mehr gespeichert – importiere sie erneut.",
   "Não foi possível contactar o Movexa. Verifica a ligação à internet.": "Movexa ist nicht erreichbar. Prüfe deine Internetverbindung.",
   "Perfil ligado ao Movexa.": "Profil mit Movexa verbunden.",
   "O pedido foi recusado no Movexa.": "Die Anfrage wurde in Movexa abgelehnt.",

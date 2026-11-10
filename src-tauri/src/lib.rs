@@ -1,5 +1,6 @@
 mod mkv;
 mod proxy;
+mod transcode;
 
 /// Subtitle tracks found so far in an MKV streamed through the proxy.
 #[tauri::command]
@@ -62,6 +63,22 @@ async fn tmdb_get(path: String, params: HashMap<String, String>) -> Result<Strin
             return Err(format!("HTTP {}", resp.status().as_u16()));
         }
         resp.text().map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn ffmpeg_installed() -> bool {
+    transcode::installed()
+}
+
+/// Duration + streams of a title, so the player can convert it and keep a correct timeline.
+#[tauri::command]
+async fn tx_info(url: String, ua: Option<String>, referer: Option<String>) -> Result<transcode::TxInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let hd = proxy::Hdrs { ua, referer };
+        transcode::info(&proxy::proxied(&url, &hd))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -218,7 +235,7 @@ fn find_player(custom: Option<String>) -> Option<std::path::PathBuf> {
     candidates.into_iter().find(|p| p.is_file())
 }
 
-/// Open a stream in VLC / mpv — fallback for codecs the webview can't decode
+/// Open a stream in VLC / mpv - fallback for codecs the webview can't decode
 /// (HEVC, AC-3, MP2 audio, MKV subtitles...).
 #[tauri::command]
 fn open_external(url: String, title: Option<String>, ua: Option<String>, referer: Option<String>, player: Option<String>) -> Result<String, String> {
@@ -257,7 +274,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .invoke_handler(tauri::generate_handler![http_get, tmdb_get, tmdb_enabled, proxy_port, probe_stream, open_external, mkv_tracks, mkv_cues, save_to_downloads, reveal_path])
+        .invoke_handler(tauri::generate_handler![http_get, ffmpeg_installed, tx_info, tmdb_get, tmdb_enabled, proxy_port, probe_stream, open_external, mkv_tracks, mkv_cues, save_to_downloads, reveal_path])
         .run(tauri::generate_context!())
         .expect("error while running HurricaneTV");
 }

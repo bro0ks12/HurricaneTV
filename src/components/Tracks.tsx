@@ -78,6 +78,10 @@ function useCueTrack(video: HTMLVideoElement | null, label: string, source: stri
         }
         try {
           const vc = new VTTCue(Math.max(0, s), e, text);
+          // keep the bottom of the cue box ~10% above the edge, whatever the number of lines (default hugs the margin)
+          vc.snapToLines = false;
+          vc.line = 90;
+          vc.lineAlign = "end";
           t.addCue(vc);
           st.current.added.set(c.start, vc);
         } catch {
@@ -128,6 +132,15 @@ export function useTracks(
   // previous track can never be fed into the newly selected one
   const [mkvData, setMkvData] = useState<{ track: number; cues: Cue[] } | null>(null);
   const autoPicked = useRef(false);
+  // converted playback (ffmpeg) restarts the element's clock at 0 on every seek: cue times must be shifted by where the stream starts
+  const [txOff, setTxOff] = useState(0);
+  useEffect(() => {
+    if (!video) return;
+    const read = () => setTxOff((video as HTMLVideoElement & { txOffset?: number }).txOffset ?? 0);
+    read();
+    video.addEventListener("txoffset", read);
+    return () => video.removeEventListener("txoffset", read);
+  }, [video]);
 
   useEffect(() => {
     setSel(null);
@@ -191,9 +204,9 @@ export function useTracks(
     };
   }, [mkvSel, streamUrl, video]);
 
-  useCueTrack(video, FILE_LABEL, ext ? `file:${ext.name}` : null, ext?.cues ?? [], offset, sel === "file");
+  useCueTrack(video, FILE_LABEL, ext ? `file:${ext.name}` : null, ext?.cues ?? [], offset - txOff, sel === "file");
   const mkvCurrent = mkvData && mkvData.track === mkvSel ? mkvData.cues : NO_CUES;
-  useCueTrack(video, MKV_LABEL, mkvSel != null ? `mkv:${mkvSel}` : null, mkvCurrent, offset, mkvSel != null);
+  useCueTrack(video, MKV_LABEL, mkvSel != null ? `mkv:${mkvSel}` : null, mkvCurrent, offset - txOff, mkvSel != null);
 
   /* --- a freshly loaded file becomes the active subtitle --- */
   useEffect(() => {
@@ -278,7 +291,7 @@ export function useTracks(
         lang: t.lang,
         active: sel === `mkv:${t.number}`,
         disabled: !t.text,
-        hint: !t.text ? tr("imagem (PGS/VobSub) — usa o VLC") : flags || undefined,
+        hint: !t.text ? tr("imagem (PGS/VobSub) - usa o VLC") : flags || undefined,
       });
     });
     if (ext) subs.push({ id: "file", label: ext.name, active: sel === "file", hint: tr("ficheiro") });

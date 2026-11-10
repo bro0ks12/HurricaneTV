@@ -1,7 +1,7 @@
 import Hls from "hls.js";
 import mpegts from "mpegts.js";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import { probeStream, proxied, type StreamHeaders } from "../lib/http";
+import { probeStream, proxied, txUrl, type StreamHeaders } from "../lib/http";
 import { cn } from "../lib/util";
 
 import { t } from "../lib/i18n";
@@ -48,6 +48,11 @@ interface Props {
   headers?: StreamHeaders;
   className?: string;
   startAt?: number;
+  /**
+   * Play a converted copy (ffmpeg → fragmented MP4) because the webview can't decode this file's audio / video.
+   * `currentTime` and `duration` keep describing the ORIGINAL title, so seeking, resume and subtitles still line up.
+   */
+  tx?: { mode: "audio" | "video"; audio: number; duration: number; start: number } | null;
   onStatus?: (s: VideoStatus) => void;
   onTime?: (t: number, d: number) => void;
   /** current hls.js instance (for subtitle / audio tracks), null otherwise */
@@ -72,7 +77,7 @@ const describe = (kind: ErrorKind, detail?: string) => {
 };
 
 export const VideoSurface = forwardRef<HTMLVideoElement | null, Props>(function VideoSurface(
-  { url, live, muted, volume, headers, className, startAt, onStatus, onTime, onHls },
+  { url, live, muted, volume, headers, className, startAt, tx, onStatus, onTime, onHls },
   ref,
 ) {
   const video = useRef<HTMLVideoElement>(null);
@@ -82,6 +87,9 @@ export const VideoSurface = forwardRef<HTMLVideoElement | null, Props>(function 
   // only read when a stream starts; changing it must never reload the video
   const startRef = useRef(startAt);
   startRef.current = startAt;
+  const txRef = useRef(tx);
+  txRef.current = tx;
+  const txKey = tx ? `${tx.mode}:${tx.audio}` : "";
   const ua = headers?.ua;
   const referer = headers?.referer;
 
@@ -241,6 +249,86 @@ export const VideoSurface = forwardRef<HTMLVideoElement | null, Props>(function 
       };
     };
 
+    // Converted playback: one <video src> on a fragmented-MP4 stream, with a virtual timeline over the whole title.
+    const startTx = (plan: NonNullable<Props["tx"]>) => {
+      status({ state: "loading", engine: "native" });
+      const nativeTime = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "currentTime")!;
+      let offset = 0; // title time at which the current converted stream starts
+      let played = false;
+      // text tracks (embedded subtitles) are timed against the element's NATIVE clock, so tell them where this stream starts
+      const publishOffset = () => {
+        (v as HTMLVideoElement & { txOffset?: number }).txOffset = offset;
+        v.dispatchEvent(new Event("txoffset"));
+      };
+      const load = (at: number) => {
+        offset = Math.max(0, Math.min(at, Math.max(0, plan.duration - 1)));
+        publishOffset();
+        v.src = txUrl(url, hd, { ss: offset, mode: plan.mode, audio: plan.audio });
+        v.play().catch(() => {});
+      };
+      Object.defineProperty(v, "currentTime", {
+        configurable: true,
+        get: () => (nativeTime.get as () => number).call(v) + offset,
+        set: (time: number) => {
+          const rel = time - offset;
+          const b = v.buffered;
+          const end = b.length ? b.end(b.length - 1) : 0;
+          // inside what is already buffered: a plain seek; otherwise restart the conversion there
+          if (rel >= 0 && rel <= end - 0.5) (nativeTime.set as (n: number) => void).call(v, rel);
+          else {
+            status({ state: "loading", engine: "native" });
+            load(time);
+          }
+        },
+      });
+      Object.defineProperty(v, "duration", { configurable: true, get: () => plan.duration });
+
+      const timer = window.setTimeout(() => !played && status({ state: "error", kind: "timeout", error: describe("timeout"), engine: "native" }), LOAD_TIMEOUT * 2);
+      const onCanPlay = () => v.play().catch(() => {});
+      const onPlaying = () => {
+        played = true;
+        status({ state: "playing", engine: "native" });
+      };
+      const onPause = () => status({ state: "paused", engine: "native" });
+      const onWaiting = () => status({ state: "loading", engine: "native" });
+      const onErr = () => {
+        // a stream we replaced on purpose reports no error; a real one means ffmpeg failed
+        if (v.error) status({ state: "error", kind: "other", error: t("Não foi possível converter este ficheiro."), engine: "native" });
+      };
+      const onTimeUpd = () => cb.current.onTime?.(v.currentTime, plan.duration);
+      v.addEventListener("canplay", onCanPlay);
+      v.addEventListener("playing", onPlaying);
+      v.addEventListener("pause", onPause);
+      v.addEventListener("waiting", onWaiting);
+      v.addEventListener("error", onErr);
+      v.addEventListener("timeupdate", onTimeUpd);
+      load(plan.start);
+
+      return () => {
+        window.clearTimeout(timer);
+        v.removeEventListener("canplay", onCanPlay);
+        v.removeEventListener("playing", onPlaying);
+        v.removeEventListener("pause", onPause);
+        v.removeEventListener("waiting", onWaiting);
+        v.removeEventListener("error", onErr);
+        v.removeEventListener("timeupdate", onTimeUpd);
+        offset = 0;
+        publishOffset();
+        delete (v as { currentTime?: number }).currentTime;
+        delete (v as { duration?: number }).duration;
+        v.removeAttribute("src");
+        v.load();
+      };
+    };
+
+    if (txRef.current && !live) {
+      cleanup = startTx(txRef.current);
+      return () => {
+        disposed = true;
+        cleanup?.();
+      };
+    }
+
     status({ state: "loading" });
     engineOrder(url, live, hd).then((o) => {
       if (disposed) return;
@@ -252,7 +340,7 @@ export const VideoSurface = forwardRef<HTMLVideoElement | null, Props>(function 
       disposed = true;
       cleanup?.();
     };
-  }, [url, live, ua, referer]);
+  }, [url, live, ua, referer, txKey]);
 
   useEffect(() => {
     if (video.current) video.current.muted = !!muted;

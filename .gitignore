@@ -4,3 +4,4 @@ src-tauri/target
 src-tauri/gen
 release
 src-tauri/tmdb.key
+src-tauri/binaries

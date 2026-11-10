@@ -72,7 +72,7 @@ export function Settings() {
                 className="rounded px-2 py-0.5 text-center font-semibold [text-shadow:0_0_4px_rgba(0,0,0,.9),0_2px_3px_rgba(0,0,0,.9)]"
                 style={{ fontSize: `${(settings.subSize / 100) * 22}px`, background: settings.subBackground ? "rgba(0,0,0,0.62)" : "transparent" }}
               >
-                {t("Exemplo de legenda — assim vai aparecer.")}
+                {t("Exemplo de legenda - assim vai aparecer.")}
               </span>
             </div>
           </Section>

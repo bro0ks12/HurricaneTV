@@ -1,7 +1,7 @@
 import { t } from "../lib/i18n";
 import type { Category, Channel, Program, Provider, SeriesItem, VodItem } from "../lib/types";
 
-/** Offline demo source using public test streams — handy to explore the UI without a subscription. */
+/** Offline demo source using public test streams - handy to explore the UI without a subscription. */
 
 const HLS = [
   "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
@@ -117,7 +117,7 @@ export function createDemo(): Provider {
     vodItems: (cat) => wait(vod.filter((c) => !cat || c.categoryId === cat)),
     vodInfo: (item) =>
       wait({
-        plot: `${item.name} — um filme de demonstração. O vídeo é um stream de teste público.`,
+        plot: `${item.name} - um filme de demonstração. O vídeo é um stream de teste público.`,
         genre: t(vodCats.find((c) => c.id === item.categoryId)?.name ?? ""),
         cast: "Ana Ribeiro, João Matos, Sofia Lima",
         director: "M. Duarte",

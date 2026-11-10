@@ -434,7 +434,7 @@ export function SeriesDetail({ item, onClose }: { item: SeriesItem; onClose: () 
   );
 
   const playEp = (e: (typeof episodes)[number]) =>
-    play({ title: showTitle, subtitle: `T${e.season} · E${e.num} — ${e.title}`, stream: e.stream, type: "episode", poster: e.image || posterPair(meta, item.poster).src, ua: e.ua, referer: e.referer, tmdb: meta?.tmdbId ? { id: meta.tmdbId, season: e.season, episode: e.num } : undefined });
+    play({ title: showTitle, subtitle: `T${e.season} · E${e.num} - ${e.title}`, stream: e.stream, type: "episode", poster: e.image || posterPair(meta, item.poster).src, ua: e.ua, referer: e.referer, tmdb: meta?.tmdbId ? { id: meta.tmdbId, season: e.season, episode: e.num } : undefined });
 
   return (
     <Modal onClose={onClose} backdrop={meta?.backdrop || info.data?.backdrop}>

@@ -242,7 +242,7 @@ function AddProfile({ onAdded, onCancel }: { onAdded: () => void; onCancel?: () 
         )}
         {kind === "demo" && (
           <div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-4 text-sm text-amber-50/80">
-            {t("Cria um perfil com canais, filmes e séries de demonstração que usam vídeos de teste públicos — útil para experimentar a interface sem uma subscrição.")}
+            {t("Cria um perfil com canais, filmes e séries de demonstração que usam vídeos de teste públicos - útil para experimentar a interface sem uma subscrição.")}
           </div>
         )}
 

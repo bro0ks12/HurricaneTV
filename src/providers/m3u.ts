@@ -261,7 +261,7 @@ export function createM3u(p: Profile): Provider {
   const source = async () => {
     if (!p.file) return httpText(p.url!);
     const text = await loadPlaylist(p.id);
-    if (!text) throw new Error(t("O ficheiro da playlist já não está guardado — importa-o outra vez."));
+    if (!text) throw new Error(t("O ficheiro da playlist já não está guardado - importa-o outra vez."));
     return text;
   };
   const data = () => (parsed ??= source().then(build));
@@ -296,7 +296,7 @@ export function createM3u(p: Profile): Provider {
           Canais: String(d.live.length),
           Filmes: String(d.vod.length),
           Séries: String(d.series.length),
-          EPG: epgCandidates(d)[0] ?? "—",
+          EPG: epgCandidates(d)[0] ?? "-",
         },
       };
     },

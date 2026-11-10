@@ -116,3 +116,20 @@ export async function mkvCues(url: string, track: number, since: number | null):
     return null;
   }
 }
+
+/* ---------------- audio / video conversion (ffmpeg ships with the app) ---------------- */
+
+export const ffmpegInstalled = async () => (inTauri ? invoke<boolean>("ffmpeg_installed").catch(() => false) : false);
+
+export interface TxInfo {
+  duration: number;
+  video: string;
+  audio: { index: number; codec: string; lang: string }[];
+}
+
+export const txInfo = (url: string, h?: StreamHeaders) => invoke<TxInfo>("tx_info", { url, ua: h?.ua ?? null, referer: h?.referer ?? null });
+
+/** Converted stream (fragmented MP4) starting `ss` seconds into the title. */
+export function txUrl(url: string, h: StreamHeaders | undefined, o: { ss: number; mode: "audio" | "video"; audio: number }): string {
+  return `http://127.0.0.1:${proxyPort}/tx?u=${encodeURIComponent(proxied(url, h))}&ss=${Math.max(0, o.ss).toFixed(3)}&mode=${o.mode}&a=${o.audio}`;
+}

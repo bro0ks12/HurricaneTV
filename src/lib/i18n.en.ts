@@ -1,5 +1,12 @@
 /** English strings. Key = original Portuguese text. Missing keys fall back to Portuguese. */
 export const EN: Record<string, string> = {
+  "O conversor não está incluído nesta versão da app.": "The converter isn't included in this version of the app.",
+  "A preparar o ficheiro…": "Preparing the file…",
+  "Não foi possível converter: {0}": "Couldn't convert: {0}",
+  "Não foi possível converter este ficheiro.": "Couldn't convert this file.",
+  "Não foi possível ler a duração do ficheiro.": "Couldn't read the file's duration.",
+  "Sem imagem: este ficheiro usa um formato de vídeo (HEVC/H.265…) que a app não consegue mostrar. Instala a extensão \"HEVC Video Extensions\" da Microsoft Store ou abre no VLC.":
+    "No picture: this file uses a video format (HEVC/H.265…) that the app can't display. Install the \"HEVC Video Extensions\" from the Microsoft Store or open it in VLC.",
   "Sem áudio: este ficheiro pode usar um formato de áudio (AC3, DTS…) que a app não consegue reproduzir.":
     "No audio: this file may use an audio format (AC3, DTS…) that the app can't play.",
   "Ilimitado": "Unlimited",
@@ -149,8 +156,8 @@ export const EN: Record<string, string> = {
   "Controlo parental": "Parental control",
   "Controlo parental ativado.": "Parental control enabled.",
   "Controlo parental desativado.": "Parental control disabled.",
-  "Cria um perfil com canais, filmes e séries de demonstração que usam vídeos de teste públicos — útil para experimentar a interface sem uma subscrição.":
-    "Creates a profile with demo channels, movies and series that use public test videos — handy to try the interface without a subscription.",
+  "Cria um perfil com canais, filmes e séries de demonstração que usam vídeos de teste públicos - útil para experimentar a interface sem uma subscrição.":
+    "Creates a profile with demo channels, movies and series that use public test videos - handy to try the interface without a subscription.",
   "Criada em": "Created",
   Criação: "Created by",
   Dados: "Data",
@@ -186,7 +193,7 @@ export const EN: Record<string, string> = {
   "Este canal não tem arquivo para este programa": "This channel has no archive for this programme",
   "Este ficheiro não é um backup da HurricaneTV.": "This file is not a HurricaneTV backup.",
   "Ex.: Casa, Sala, Servidor 1": "E.g. Home, Living room, Server 1",
-  "Exemplo de legenda — assim vai aparecer.": "Sample subtitle — this is how it will look.",
+  "Exemplo de legenda - assim vai aparecer.": "Sample subtitle - this is how it will look.",
   Expira: "Expires",
   Explorar: "Explore",
   Exportar: "Export",
@@ -368,7 +375,7 @@ export const EN: Record<string, string> = {
   "ativas / máximo": "active / maximum",
   ficheiro: "file",
   forçadas: "forced",
-  "imagem (PGS/VobSub) — usa o VLC": "image (PGS/VobSub) — use VLC",
+  "imagem (PGS/VobSub) - usa o VLC": "image (PGS/VobSub) - use VLC",
   padrão: "default",
   versão: "version",
   "{0} · desde o início": "{0} · from the start",
@@ -389,7 +396,7 @@ export const EN: Record<string, string> = {
   "Indica um URL http(s) ou escolhe um ficheiro de playlist.": "Enter an http(s) URL or choose a playlist file.",
   "Este ficheiro não parece uma playlist M3U.": "This file doesn't look like an M3U playlist.",
   "Ficheiro: {0}": "File: {0}",
-  "O ficheiro da playlist já não está guardado — importa-o outra vez.": "The playlist file is no longer stored — import it again.",
+  "O ficheiro da playlist já não está guardado - importa-o outra vez.": "The playlist file is no longer stored - import it again.",
   "Não foi possível contactar o Movexa. Verifica a ligação à internet.": "Couldn't reach Movexa. Check your internet connection.",
   "Perfil ligado ao Movexa.": "Profile connected to Movexa.",
   "O pedido foi recusado no Movexa.": "The request was declined on Movexa.",

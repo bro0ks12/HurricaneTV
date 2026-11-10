@@ -20,7 +20,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { openExternal, type StreamHeaders } from "../lib/http";
+import { ffmpegInstalled, openExternal, txInfo, type StreamHeaders, type TxInfo } from "../lib/http";
 import { useQuery } from "../lib/query";
 import { onProgress } from "../lib/scrobble";
 import { parseSubtitles, readSubtitleFile, type Cue } from "../lib/subs";
@@ -41,6 +41,25 @@ const fmtDur = (s: number) => {
   return (h ? `${h}:${String(m).padStart(2, "0")}` : String(m)) + `:${String(sec).padStart(2, "0")}`;
 };
 
+/** Which conversion (if any) a file needs, judged by what this webview can really decode. */
+function conversionNeeded(info: TxInfo): "audio" | "video" | null {
+  const ok = (mime: string) => typeof MediaSource !== "undefined" && MediaSource.isTypeSupported(mime);
+  const V: Record<string, string | null> = { h264: null, vp8: "vp8", vp9: "vp09.00.10.08", av1: "av01.0.05M.08", hevc: "hvc1.1.6.L93.B0" };
+  const v = info.video.toLowerCase();
+  if (v) {
+    // h264 is always decodable; anything not listed (mpeg4, vc1, mpeg2…) is not
+    const codec = V[v];
+    if (codec === undefined || (codec !== null && !ok(`video/mp4; codecs="${codec}"`))) return "video";
+  }
+  const A: Record<string, string> = { ac3: "ac-3", eac3: "ec-3" };
+  const NATIVE = /^(aac|mp3|mp2|opus|vorbis|flac|alac|pcm_.*)$/;
+  const a = info.audio[0]?.codec.toLowerCase();
+  if (a && !NATIVE.test(a)) {
+    if (!A[a] || !ok(`audio/mp4; codecs="${A[a]}"`)) return "audio";
+  }
+  return null;
+}
+
 export function Player() {
   const req = useApp((s) => s.playing);
   const play = useApp((s) => s.play);
@@ -57,8 +76,14 @@ export function Player() {
   const [controls, setControls] = useState(true);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(1);
-  // "on" = video is playing but the webview decoded no audio at all (usually an AC3/E-AC3/DTS/TrueHD track)
-  const [noAudio, setNoAudio] = useState<"off" | "on" | "hidden">("off");
+  // "audio" = picture moves but no audio was decoded (AC3/E-AC3/DTS/TrueHD); "video" = sound plays but no frame was decoded (HEVC/H.265 without codec support)
+  const [noAudio, setNoAudio] = useState<"off" | "audio" | "video" | "hidden">("off");
+  // converted playback (ffmpeg): audio when the webview can't decode it (AC3/E-AC3/DTS), video for HEVC
+  const [tx, setTx] = useState<{ mode: "audio" | "video"; audio: number; duration: number; start: number } | null>(null);
+  const [conv, setConv] = useState<{ phase: "prepare" | "error"; error?: string } | null>(null);
+  const [ffReady, setFfReady] = useState<boolean | null>(null); // null = still checking
+  // playback only starts once we know whether this file needs converting (never start silent and switch later)
+  const [ready, setReady] = useState(false);
   const [time, setTime] = useState({ t: 0, d: 0 });
   const [full, setFull] = useState(!!document.fullscreenElement);
   const [nonce, setNonce] = useState(0);
@@ -257,24 +282,89 @@ export function Player() {
     if (video.current) video.current.volume = volume;
   }, [volume, url]);
 
-  // detect silent playback: Chromium counts the audio bytes it decoded; 0 while the picture moves = no usable audio track
+  // detect playback the webview can only half decode: Chromium counts decoded audio bytes and video frames
   useEffect(() => {
     setNoAudio("off");
     if (!url) return;
     let strikes = 0;
     const id = setInterval(() => {
-      const v = video.current as (HTMLVideoElement & { webkitAudioDecodedByteCount?: number }) | null;
+      const v = video.current as (HTMLVideoElement & { webkitAudioDecodedByteCount?: number; webkitDecodedFrameCount?: number }) | null;
       if (!v || typeof v.webkitAudioDecodedByteCount !== "number") return;
-      if (v.paused || v.seeking || v.readyState < 3 || v.currentTime < 3) return;
-      if (v.webkitAudioDecodedByteCount > 0) {
+      if (v.paused || v.seeking || v.readyState < 2 || v.currentTime < 3) return;
+      const audio = v.webkitAudioDecodedByteCount > 0;
+      const picture = typeof v.webkitDecodedFrameCount === "number" ? v.webkitDecodedFrameCount > 0 : v.videoWidth > 0;
+      const problem = !picture && audio ? "video" : picture && !audio ? "audio" : null;
+      if (!problem) {
         strikes = 0;
-        setNoAudio((s) => (s === "on" ? "off" : s));
+        setNoAudio((s) => (s === "audio" || s === "video" ? "off" : s));
       } else if (++strikes >= 2) {
-        setNoAudio((s) => (s === "off" ? "on" : s));
+        setNoAudio((s) => (s === "off" ? problem : s));
       }
     }, 1500);
     return () => clearInterval(id);
   }, [url, nonce]);
+
+  useEffect(() => {
+    ffmpegInstalled().then(setFfReady);
+  }, []);
+  // Before playing a movie / episode, look inside the file: if its audio (E-AC3, AC3, DTS…) or video (HEVC…) isn't something the
+  // webview can decode, start the converted stream straight away. If anything goes wrong here we just play it normally.
+  useEffect(() => {
+    setTx(null);
+    setConv(null);
+    setReady(false);
+    if (!url) return;
+    if (live || ffReady === null) return live ? setReady(true) : undefined;
+    if (!ffReady) return setReady(true);
+    let alive = true;
+    setConv({ phase: "prepare" });
+    const giveUp = window.setTimeout(() => {
+      if (!alive) return;
+      alive = false;
+      setConv(null);
+      setReady(true);
+    }, 20_000);
+    txInfo(url, headers)
+      .then((info) => {
+        if (!alive) return;
+        const mode = conversionNeeded(info);
+        if (mode && info.duration > 0) setTx({ mode, audio: 0, duration: info.duration, start: resumeAt ?? 0 });
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!alive) return;
+        alive = false;
+        window.clearTimeout(giveUp);
+        setConv(null);
+        setReady(true);
+      });
+    return () => {
+      alive = false;
+      window.clearTimeout(giveUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, live, ffReady, nonce]);
+
+  const startConvert = async (mode: "audio" | "video") => {
+    if (!url || live || conv?.phase === "prepare") return;
+    try {
+      if (!(await ffmpegInstalled())) throw new Error(t("O conversor não está incluído nesta versão da app."));
+      setConv({ phase: "prepare" });
+      const info = await txInfo(url, headers);
+      if (!(info.duration > 0)) throw new Error(t("Não foi possível ler a duração do ficheiro."));
+      setTx({ mode, audio: 0, duration: info.duration, start: video.current?.currentTime ?? 0 });
+      setNoAudio("hidden");
+      setConv(null);
+    } catch (e) {
+      setConv({ phase: "error", error: String(e instanceof Error ? e.message : e) });
+    }
+  };
+
+  // the converter ships with the app: switch automatically as soon as a file turns out to be half-playable
+  useEffect(() => {
+    if ((noAudio === "audio" || noAudio === "video") && ffReady && !tx && !conv && !live) startConvert(noAudio);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noAudio, ffReady]);
 
   // keyboard
   useEffect(() => {
@@ -408,11 +498,12 @@ export function Player() {
       <VideoSurface
         ref={attachVideo}
         key={`${url}-${nonce}`}
-        url={url}
+        url={ready ? url : null}
         live={live}
         muted={muted}
         headers={headers}
         startAt={resumeAt}
+        tx={tx}
         onStatus={setStatus}
         onTime={(t, d) => setTime({ t, d })}
         onHls={setHls}
@@ -436,18 +527,45 @@ export function Player() {
           <Loader2 className="size-14 animate-spin text-sky-300 drop-shadow-lg" />
         </div>
       )}
-      {noAudio === "on" && !err && (
-        <div className="absolute top-20 left-1/2 z-20 flex max-w-xl -translate-x-1/2 items-center gap-3 rounded-2xl border border-amber-300/30 bg-black/80 px-4 py-3 text-sm backdrop-blur">
-          <VolumeX className="size-5 shrink-0 text-amber-300" />
-          <span className="text-sky-50/90">{t("Sem áudio: este ficheiro pode usar um formato de áudio (AC3, DTS…) que a app não consegue reproduzir.")}</span>
-          {url && (
-            <button className="focusable inline-flex h-9 shrink-0 items-center gap-2 rounded-xl bg-sky-500 px-3 text-xs font-semibold" onClick={external}>
-              <ExternalLink className="size-4" /> {t("Abrir no VLC / mpv")}
-            </button>
+      {conv && !err && (
+        <div className="absolute top-20 left-1/2 z-20 flex max-w-xl -translate-x-1/2 items-center gap-3 rounded-2xl border border-sky-300/30 bg-black/80 px-4 py-3 text-sm backdrop-blur">
+          {conv.phase === "error" ? <VolumeX className="size-5 shrink-0 text-rose-300" /> : <Loader2 className="size-5 shrink-0 animate-spin text-sky-300" />}
+          <span className="text-sky-50/90">
+            {conv.phase === "prepare" ? t("A preparar o ficheiro…") : t("Não foi possível converter: {0}", { 0: conv.error ?? "" })}
+          </span>
+          {conv.phase === "error" && (
+            <>
+              <button className="focusable inline-flex h-9 shrink-0 items-center gap-2 rounded-xl border border-white/20 px-3 text-xs font-semibold hover:bg-white/10" onClick={() => startConvert(noAudio === "video" ? "video" : "audio")}>
+                <RefreshCw className="size-4" /> {t("Tentar de novo")}
+              </button>
+              {url && (
+                <button className="focusable inline-flex h-9 shrink-0 items-center gap-2 rounded-xl bg-sky-500 px-3 text-xs font-semibold" onClick={external}>
+                  <ExternalLink className="size-4" /> {t("Abrir no VLC / mpv")}
+                </button>
+              )}
+              <button className="focusable shrink-0 rounded-lg px-2 py-1 text-xs text-sky-100/60 hover:text-white" onClick={() => setConv(null)}>
+                {t("Fechar")}
+              </button>
+            </>
           )}
-          <button className="focusable shrink-0 rounded-lg px-2 py-1 text-xs text-sky-100/60 hover:text-white" onClick={() => setNoAudio("hidden")}>
-            {t("Fechar")}
-          </button>
+        </div>
+      )}
+      {(noAudio === "audio" || noAudio === "video") && !err && !conv && !tx && (ffReady === false || live) && (
+        <div className="absolute top-20 left-1/2 z-20 flex max-w-xl -translate-x-1/2 flex-col gap-3 rounded-2xl border border-amber-300/30 bg-black/80 px-4 py-3 text-sm backdrop-blur">
+          <div className="flex items-center gap-3">
+            <VolumeX className="size-5 shrink-0 text-amber-300" />
+            <span className="text-sky-50/90">{noAudio === "video" ? t("Sem imagem: este ficheiro usa um formato de vídeo (HEVC/H.265…) que a app não consegue mostrar. Instala a extensão \"HEVC Video Extensions\" da Microsoft Store ou abre no VLC.") : t("Sem áudio: este ficheiro pode usar um formato de áudio (AC3, DTS…) que a app não consegue reproduzir.")}</span>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {url && (
+              <button className="focusable inline-flex h-9 items-center gap-2 rounded-xl border border-white/20 px-3 text-xs font-semibold hover:bg-white/10" onClick={external}>
+                <ExternalLink className="size-4" /> {t("Abrir no VLC / mpv")}
+              </button>
+            )}
+            <button className="focusable rounded-lg px-2 py-1 text-xs text-sky-100/60 hover:text-white" onClick={() => setNoAudio("hidden")}>
+              {t("Fechar")}
+            </button>
+          </div>
         </div>
       )}
       {err && (

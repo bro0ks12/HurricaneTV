@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "HurricaneTV",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "identifier": "com.hurricanetv.app",
   "build": {
     "frontendDist": "../dist",
@@ -29,6 +29,12 @@
   },
   "bundle": {
     "active": true,
+    "externalBin": [
+      "binaries/ffmpeg"
+    ],
+    "resources": {
+      "binaries/FFMPEG-LICENSE.txt": "licenses/FFMPEG-LICENSE.txt"
+    },
     "targets": [
       "nsis"
     ],
@@ -36,7 +42,7 @@
     "copyright": "HurricaneTV",
     "category": "Video",
     "shortDescription": "Leitor IPTV",
-    "longDescription": "HurricaneTV — leitor IPTV para Xtream Codes, M3U e Stalker.",
+    "longDescription": "HurricaneTV - leitor IPTV para Xtream Codes, M3U e Stalker.",
     "windows": {
       "webviewInstallMode": {
         "type": "downloadBootstrapper",

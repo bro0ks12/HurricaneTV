@@ -48,7 +48,7 @@ export interface VodItem {
   categoryId?: string;
   rating?: number;
   year?: string;
-  /** when the provider added it (ms epoch) — drives the "Recentes" sort */
+  /** when the provider added it (ms epoch) - drives the "Recentes" sort */
   added?: number;
   ext?: string;
   stream: string;

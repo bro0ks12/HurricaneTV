@@ -52,10 +52,7 @@ export function Home() {
 
   // hero: what you were watching (hover/focus a card to preview it), else rotating featured titles
   const history = useHistory();
-  const resumable = useMemo(
-    () => history.filter((h) => (h.play.type === "vod" || h.play.type === "episode") && !(h.position && h.duration && h.position / h.duration >= 0.95)).slice(0, 15),
-    [history],
-  );
+  const resumable = useMemo(() => collapseResumable(history), [history]);
   const [selKey, setSelKey] = useState<string | null>(null);
   const sel = resumable.find((h) => h.key === selKey) ?? resumable[0] ?? null;
   const selMeta = useHistoryMeta(sel, metaOn);
@@ -171,6 +168,30 @@ function useFeatured(vod: VodItem[], series: SeriesItem[], enabled: boolean): Fe
     };
   }, [vod, series, enabled]);
   return list;
+}
+
+/** season * 1000 + episode, so "T3 · E16" > "T3 · E15" > "T2 · E20" */
+const epOrder = (h: HistoryEntry) => {
+  const x = h.play.tmdb;
+  if (x?.season != null && x.episode != null) return x.season * 1000 + x.episode;
+  const m = /^T(\d+) · E(\d+)/.exec(h.play.subtitle ?? "");
+  return m ? Number(m[1]) * 1000 + Number(m[2]) : 0;
+};
+
+/**
+ * One card per movie and one per series: for a series keep the furthest episode (not every episode ever opened),
+ * placed where the series was last watched. Finished titles are left out.
+ */
+function collapseResumable(history: HistoryEntry[]): HistoryEntry[] {
+  const out = new Map<string, HistoryEntry>();
+  for (const h of [...history].sort((x, y) => y.at - x.at)) {
+    if (h.play.type !== "vod" && h.play.type !== "episode") continue;
+    const key = h.play.type === "episode" ? `s:${cleanTitle(h.title).title.toLowerCase()}` : `v:${h.key}`;
+    const prev = out.get(key);
+    if (!prev || (h.play.type === "episode" && epOrder(h) > epOrder(prev))) out.set(key, h);
+  }
+  // a series whose furthest episode is finished is done (the next episode isn't known here)
+  return [...out.values()].filter((h) => !(h.position && h.duration && h.position / h.duration >= 0.95)).slice(0, 15);
 }
 
 /** Metadata (backdrop, logo, plot…) for the history entry shown in the hero. */
