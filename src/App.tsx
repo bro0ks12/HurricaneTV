@@ -5,6 +5,7 @@ import { Background } from "./components/ui";
 import { initProxy } from "./lib/http";
 import { UpdateToast } from "./components/UpdateToast";
 import { PinHost } from "./lib/parental";
+import { flushAllMovexa } from "./lib/scrobble";
 import { installSpatialNav } from "./lib/spatial";
 import { Account } from "./screens/Account";
 import { CatchUp } from "./screens/CatchUp";
@@ -30,6 +31,7 @@ export default function App() {
 
   useEffect(() => {
     initProxy().finally(() => setReady(true));
+    flushAllMovexa();
   }, []);
   useEffect(() => installSpatialNav(back), [back]);
 

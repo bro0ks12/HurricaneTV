@@ -1,5 +1,6 @@
 import { ArrowLeft, Loader2, Lock, LockOpen, Search, Star, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { encode } from "uqr";
 import { useApp } from "../store/app";
 import { cn, fmtTime } from "../lib/util";
 
@@ -380,5 +381,22 @@ function Avatar({ src, name }: { src?: string; name: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+/* ---------------- QR code ---------------- */
+
+/** Always dark on a white plate: phone cameras read inverted (light-on-dark) codes poorly. */
+export function QrCode({ value, label, className }: { value: string; label: string; className?: string }) {
+  const { d, size } = useMemo(() => {
+    const qr = encode(value, { ecc: "M", border: 2 });
+    let d = "";
+    qr.data.forEach((row, y) => row.forEach((on, x) => on && (d += `M${x} ${y}h1v1h-1z`)));
+    return { d, size: qr.data.length };
+  }, [value]);
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} shapeRendering="crispEdges" role="img" aria-label={label} className={cn("rounded-xl bg-white", className)}>
+      <path d={d} fill="#000" />
+    </svg>
   );
 }

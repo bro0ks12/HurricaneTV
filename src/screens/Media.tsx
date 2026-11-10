@@ -377,7 +377,7 @@ export function VodDetail({ item, onClose }: { item: VodItem; onClose: () => voi
         loading={info.loading}
         actions={
           <>
-            <Button autoFocus onClick={() => play({ title: meta?.confident ? meta.title : cleanTitle(item.name).title, stream: item.stream, type: "vod", poster: posterPair(meta, item.poster).src, ua: item.ua, referer: item.referer })}>
+            <Button autoFocus onClick={() => play({ title: meta?.confident ? meta.title : cleanTitle(item.name).title, stream: item.stream, type: "vod", poster: posterPair(meta, item.poster).src, ua: item.ua, referer: item.referer, tmdb: meta?.tmdbId ? { id: meta.tmdbId } : undefined })}>
               <Play className="size-4 fill-white" /> {resume?.position ? t("Continuar") : t("Ver agora")}
             </Button>
             <Button variant="ghost" onClick={() => toggleFav("vod", item)}>
@@ -434,7 +434,7 @@ export function SeriesDetail({ item, onClose }: { item: SeriesItem; onClose: () 
   );
 
   const playEp = (e: (typeof episodes)[number]) =>
-    play({ title: showTitle, subtitle: `T${e.season} · E${e.num} — ${e.title}`, stream: e.stream, type: "episode", poster: e.image || posterPair(meta, item.poster).src, ua: e.ua, referer: e.referer });
+    play({ title: showTitle, subtitle: `T${e.season} · E${e.num} — ${e.title}`, stream: e.stream, type: "episode", poster: e.image || posterPair(meta, item.poster).src, ua: e.ua, referer: e.referer, tmdb: meta?.tmdbId ? { id: meta.tmdbId, season: e.season, episode: e.num } : undefined });
 
   return (
     <Modal onClose={onClose} backdrop={meta?.backdrop || info.data?.backdrop}>

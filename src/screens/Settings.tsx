@@ -1,7 +1,9 @@
-import { Captions, Clock3, Database, Eraser, ExternalLink, EyeOff, Info, KeyRound, Lock, LockOpen, MonitorPlay, PlayCircle, Languages, Settings as Cog, ShieldCheck, Download, FolderOpen, Upload, SquareDashed, Type } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
-import { Button, ScreenHeader } from "../components/ui";
+import { Captions, Clock3, Database, Eraser, ExternalLink, EyeOff, Info, KeyRound, Link2, Loader2, Lock, LockOpen, MonitorPlay, PlayCircle, Languages, Settings as Cog, ShieldCheck, Download, FolderOpen, Upload, SquareDashed, Type, Unlink } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Button, QrCode, ScreenHeader } from "../components/ui";
 import { clearMetaCache } from "../lib/meta";
+import { pollDeviceToken, requestDeviceCode, unlinkDevice, type DeviceCode } from "../lib/movexa";
+import { flushMovexa } from "../lib/scrobble";
 import { applyBackup, buildBackup, parseBackup, revealFile, saveBackup, type BackupFile } from "../lib/backup";
 import { askPin, chooseNewPin, hashPin } from "../lib/parental";
 import { clearCache } from "../lib/query";
@@ -74,6 +76,8 @@ export function Settings() {
               </span>
             </div>
           </Section>
+
+          <MovexaSection />
 
           <ParentalSection />
 
@@ -176,6 +180,124 @@ function Segmented<T extends string>({ value, onChange, options }: { value: T; o
         </button>
       ))}
     </div>
+  );
+}
+
+type LinkState =
+  | { step: "idle" }
+  | { step: "requesting" }
+  | { step: "waiting"; code: DeviceCode; until: number }
+  | { step: "expired" };
+
+function MovexaSection() {
+  const profile = useApp((s) => s.profiles.find((p) => p.id === s.activeId) ?? null);
+  const link = useApp((s) => (s.activeId ? s.movexa[s.activeId] : undefined));
+  const pending = useApp((s) => (s.activeId ? (s.movexaQueue[s.activeId]?.length ?? 0) : 0));
+  const setLink = useApp((s) => s.setMovexaLink);
+  const [state, setState] = useState<LinkState>({ step: "idle" });
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const pid = profile?.id;
+
+  const start = async () => {
+    if (!profile) return;
+    setMsg(null);
+    setState({ step: "requesting" });
+    try {
+      const code = await requestDeviceCode(`HurricaneTV · ${profile.name}`);
+      setState({ step: "waiting", code, until: Date.now() + code.expires_in * 1000 });
+    } catch {
+      setState({ step: "idle" });
+      setMsg({ ok: false, text: t("Não foi possível contactar o Movexa. Verifica a ligação à internet.") });
+    }
+  };
+
+  const waiting = state.step === "waiting" ? state : null;
+  useEffect(() => {
+    if (!waiting || !pid) return;
+    let alive = true;
+    let timer: number | undefined;
+    const tick = async () => {
+      if (Date.now() > waiting.until) return alive && setState({ step: "expired" });
+      const r = await pollDeviceToken(waiting.code.device_code).catch(() => ({ status: "pending" as const }));
+      if (!alive) return;
+      if (r.status === "linked") {
+        setLink(pid, r.link);
+        setState({ step: "idle" });
+        setMsg({ ok: true, text: t("Perfil ligado ao Movexa.") });
+      } else if (r.status === "denied") {
+        setState({ step: "idle" });
+        setMsg({ ok: false, text: t("O pedido foi recusado no Movexa.") });
+      } else if (r.status === "expired") {
+        setState({ step: "expired" });
+      } else {
+        timer = window.setTimeout(tick, waiting.code.interval * 1000);
+      }
+    };
+    timer = window.setTimeout(tick, waiting.code.interval * 1000);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [waiting, pid, setLink]);
+
+  const disconnect = () => {
+    if (!pid || !link) return;
+    void unlinkDevice(link.token);
+    setLink(pid, null);
+    setMsg(null);
+  };
+
+  return (
+    <Section title={t("Movexa")}>
+      {link ? (
+        <Row
+          icon={<Link2 />}
+          title={link.user ? t("Ligado ao Movexa como {0}", { 0: link.user }) : t("Ligado ao Movexa")}
+          hint={
+            t("Os filmes e episódios que vês até ao fim ficam marcados como vistos no teu histórico do Movexa.") +
+            (pending ? " " + tn(pending, "1 título por enviar.", "{n} títulos por enviar.") : "")
+          }
+        >
+          <div className="flex gap-2">
+            {pending > 0 && (
+              <Button variant="ghost" onClick={() => pid && flushMovexa(pid)}>
+                {t("Enviar agora")}
+              </Button>
+            )}
+            <Button variant="danger" onClick={disconnect}>
+              <Unlink className="size-4" /> {t("Desligar")}
+            </Button>
+          </div>
+        </Row>
+      ) : waiting ? (
+        <div className="flex flex-wrap items-center gap-6 px-5 py-5">
+          <QrCode value={waiting.code.verification_uri_complete} label={t("QR code para ligar ao Movexa")} className="size-44 shrink-0 p-1" />
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="text-sm font-semibold">{t("Lê o QR code com o telemóvel")}</div>
+            <div className="text-xs text-sky-100/60">{t("Ou abre {0} e introduz este código:", { 0: waiting.code.verification_uri.replace(/^https?:\/\//, "") })}</div>
+            <div className="font-mono text-3xl font-bold tracking-[0.2em]">{waiting.code.user_code}</div>
+            <div className="flex items-center gap-2 text-xs text-sky-100/50">
+              <Loader2 className="size-3.5 animate-spin" /> {t("À espera de confirmação…")}
+            </div>
+          </div>
+          <Button variant="ghost" onClick={() => setState({ step: "idle" })}>
+            {t("Cancelar")}
+          </Button>
+        </div>
+      ) : (
+        <Row
+          icon={<Link2 />}
+          title={state.step === "expired" ? t("O código expirou") : t("Ligar ao Movexa")}
+          hint={t("Liga este perfil ao Movexa com um QR code para manter o teu histórico sincronizado com as tuas outras apps.")}
+        >
+          <Button onClick={start} disabled={state.step === "requesting"}>
+            {state.step === "requesting" && <Loader2 className="size-4 animate-spin" />}
+            {state.step === "expired" ? t("Gerar novo código") : t("Ligar")}
+          </Button>
+        </Row>
+      )}
+      {msg && <div className={cn("px-5 py-3 text-sm font-semibold", msg.ok ? "text-emerald-300" : "text-rose-300")}>{msg.text}</div>}
+    </Section>
   );
 }
 

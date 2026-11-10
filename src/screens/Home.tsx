@@ -310,7 +310,7 @@ function FeaturedHero({
   const title = m?.title ?? cleanTitle(f.item.name).title;
   const isFav = f.kind === "vod" ? favs.vod.some((x) => x.id === f.item.id) : favs.series.some((x) => x.id === f.item.id);
   const watch = () => {
-    if (f.kind === "vod") play({ title, stream: f.item.stream, type: "vod", poster: m?.poster ?? f.item.poster, ua: f.item.ua, referer: f.item.referer });
+    if (f.kind === "vod") play({ title, stream: f.item.stream, type: "vod", poster: m?.poster ?? f.item.poster, ua: f.item.ua, referer: f.item.referer, tmdb: m?.tmdbId ? { id: m.tmdbId } : undefined });
     else onDetails(f);
   };
 

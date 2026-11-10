@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import { defaultSettings, setSettingsRef, type Settings } from "../lib/settings";
 import type { Channel, Profile, Provider, SeriesItem, VodItem } from "../lib/types";
 import { deletePlaylist } from "../lib/files";
+import { unlinkDevice, type MovexaLink, type ScrobbleItem } from "../lib/movexa";
 import { createProvider } from "../providers";
 
 export type Screen =
@@ -32,6 +33,8 @@ export interface PlayRequest {
   referer?: string;
   /** set when playing a catch-up "start over": lets the player jump back to live */
   liveReturn?: PlayRequest;
+  /** TMDB identity of a movie / episode, used to sync it to Movexa once watched */
+  tmdb?: { id: number; season?: number; episode?: number };
 }
 
 interface Favs {
@@ -60,6 +63,12 @@ interface State {
   lockedCats: Record<string, string[]>;
   /** epoch ms until which locked content is unlocked (not persisted) */
   parentalUntil: number;
+  /** Movexa account linked to each profile */
+  movexa: Record<string, MovexaLink>;
+  /** finished titles not yet accepted by Movexa (offline, server down), per profile */
+  movexaQueue: Record<string, ScrobbleItem[]>;
+  setMovexaLink(profileId: string, link: MovexaLink | null): void;
+  setMovexaQueue(profileId: string, items: ScrobbleItem[]): void;
   toggleLock(key: string): void;
   setParentalUntil(t: number): void;
   // volatile
@@ -99,6 +108,15 @@ export const useApp = create<State>()(
       history: {},
       lockedCats: {},
       parentalUntil: 0,
+      movexa: {},
+      movexaQueue: {},
+      setMovexaLink: (pid, link) =>
+        set((s) => {
+          const { [pid]: _old, ...movexa } = s.movexa;
+          const { [pid]: _q, ...movexaQueue } = s.movexaQueue;
+          return link ? { movexa: { ...movexa, [pid]: link } } : { movexa, movexaQueue };
+        }),
+      setMovexaQueue: (pid, items) => set((s) => ({ movexaQueue: { ...s.movexaQueue, [pid]: items } })),
       toggleLock: (key) =>
         set((s) => {
           const pid = s.activeId ?? "_";
@@ -113,7 +131,10 @@ export const useApp = create<State>()(
         set((s) => {
           const profiles = s.profiles.filter((x) => x.id !== id);
           void deletePlaylist(id);
-          return { profiles, activeId: s.activeId === id ? (profiles[0]?.id ?? null) : s.activeId };
+          const { [id]: link, ...movexa } = s.movexa;
+          const { [id]: _q, ...movexaQueue } = s.movexaQueue;
+          if (link) void unlinkDevice(link.token);
+          return { profiles, activeId: s.activeId === id ? (profiles[0]?.id ?? null) : s.activeId, movexa, movexaQueue };
         }),
       setActive: (id) => set({ activeId: id, stack: ["home"] }),
       updateSettings: (patch) =>
@@ -148,7 +169,7 @@ export const useApp = create<State>()(
     }),
     {
       name: "hurricanetv",
-      partialize: (s) => ({ profiles: s.profiles, activeId: s.activeId, settings: s.settings, favs: s.favs, history: s.history, lockedCats: s.lockedCats }),
+      partialize: (s) => ({ profiles: s.profiles, activeId: s.activeId, settings: s.settings, favs: s.favs, history: s.history, lockedCats: s.lockedCats, movexa: s.movexa, movexaQueue: s.movexaQueue }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<State>;
         return { ...current, ...p, settings: { ...defaultSettings, ...(p.settings ?? {}) } };

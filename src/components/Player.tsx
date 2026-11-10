@@ -22,6 +22,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openExternal, type StreamHeaders } from "../lib/http";
 import { useQuery } from "../lib/query";
+import { onProgress } from "../lib/scrobble";
 import { parseSubtitles, readSubtitleFile, type Cue } from "../lib/subs";
 import type { Channel, Program } from "../lib/types";
 import { cn, fmtTime, progress } from "../lib/util";
@@ -140,6 +141,7 @@ export function Player() {
     const v = video.current;
     if (!req || live || !v || !v.duration) return;
     pushHistory({ key: histKey, title: req.title, poster: req.poster, play: { ...req, channels: undefined }, at: Date.now(), position: v.currentTime, duration: v.duration });
+    void onProgress(req, v.currentTime, v.duration);
   }, [req, live, histKey, pushHistory]);
 
   useEffect(() => {
