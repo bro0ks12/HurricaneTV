@@ -5,7 +5,7 @@ import { useParental } from "../lib/parental";
 import { useQuery } from "../lib/query";
 import { isAdult } from "../lib/settings";
 import type { Channel, Program } from "../lib/types";
-import { cn, fmtDay, fmtTime } from "../lib/util";
+import { cn, fmtDay, fmtTime, tidyPrograms } from "../lib/util";
 import { useApp, useFavs, useProfile, useProvider } from "../store/app";
 
 import { t } from "../lib/i18n";
@@ -125,7 +125,7 @@ function EpgRow({ ch, channels, start, end, now }: { ch: Channel; channels: Chan
   const h24 = useApp((s) => s.settings.timeFormat24);
   const epg = useQuery(`epg-grid:${ch.id}`, () => provider.epg(ch, 30));
 
-  const progs = (epg.data ?? []).filter((p) => p.end > start && p.start < end);
+  const progs = tidyPrograms(epg.data ?? []).filter((p) => p.end > start && p.start < end);
   const openLive = () => play({ title: ch.name, stream: ch.stream, type: "live", channels, index: channels.indexOf(ch), poster: ch.logo, ua: ch.ua, referer: ch.referer });
   const openProgram = async (p: Program) => {
     if (p.start <= now && p.end > now) return openLive();

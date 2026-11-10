@@ -1,6 +1,7 @@
 import { loadPlaylist } from "../lib/files";
 import { httpText } from "../lib/http";
 import { t } from "../lib/i18n";
+import { tidyPrograms } from "../lib/util";
 import type { Category, Channel, Episode, Profile, Program, Provider, SeriesInfo, SeriesItem, VodItem } from "../lib/types";
 
 interface Entry {
@@ -213,6 +214,19 @@ function xmltvDate(s: string): number {
   return utc - off * 60000;
 }
 
+/** Xtream-style panels serve the guide at /xmltv.php with the same credentials as get.php. */
+function xmltvFromPanel(url?: string): string | undefined {
+  try {
+    const u = new URL(url ?? "");
+    const user = u.searchParams.get("username");
+    const pass = u.searchParams.get("password");
+    if (!/\/get\.php$/i.test(u.pathname) || !user || !pass) return undefined;
+    return `${u.origin}${u.pathname.replace(/get\.php$/i, "xmltv.php")}?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}`;
+  } catch {
+    return undefined;
+  }
+}
+
 async function loadXmltv(url: string, wanted: Set<string>): Promise<Map<string, Program[]>> {
   const text = await httpText(url);
   const out = new Map<string, Program[]>();
@@ -235,7 +249,7 @@ async function loadXmltv(url: string, wanted: Set<string>): Promise<Map<string, 
     if (!out.has(key)) out.set(key, []);
     out.get(key)!.push({ title, description, start, end });
   }
-  for (const list of out.values()) list.sort((a, b) => a.start - b.start);
+  for (const [k, list] of out) out.set(k, tidyPrograms(list));
   return out;
 }
 
@@ -251,12 +265,22 @@ export function createM3u(p: Profile): Provider {
     return text;
   };
   const data = () => (parsed ??= source().then(build));
+  // EPG sources, best first: the profile's own, the playlist header (may list several), then the panel's xmltv.php
+  const epgCandidates = (d: Parsed) => [...new Set([p.epgUrl, ...(d.epgUrl ?? "").split(","), xmltvFromPanel(p.url)].map((u) => u?.trim()).filter(Boolean) as string[])];
   const guide = async () => {
     const d = await data();
-    const url = p.epgUrl || d.epgUrl?.split(",")[0];
-    if (!url) return new Map<string, Program[]>();
     const wanted = new Set(d.live.map((c) => c.epgId?.toLowerCase()).filter(Boolean) as string[]);
-    return (epg ??= loadXmltv(url, wanted).catch(() => new Map<string, Program[]>()));
+    if (epg) return epg;
+    const found = (async () => {
+      for (const url of epgCandidates(d)) {
+        const m = await loadXmltv(url, wanted).catch(() => null);
+        if (m?.size) return m;
+      }
+      return new Map<string, Program[]>();
+    })();
+    const m = await found;
+    if (m.size) epg = found; // don't cache a failed/empty guide: retry next time
+    return m;
   };
   const progsFor = async (ch: Channel) => (ch.epgId ? (await guide()).get(ch.epgId.toLowerCase()) ?? [] : []);
 
@@ -272,7 +296,7 @@ export function createM3u(p: Profile): Provider {
           Canais: String(d.live.length),
           Filmes: String(d.vod.length),
           Séries: String(d.series.length),
-          EPG: p.epgUrl || d.epgUrl || "—",
+          EPG: epgCandidates(d)[0] ?? "—",
         },
       };
     },
